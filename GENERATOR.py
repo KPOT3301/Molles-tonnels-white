@@ -16,15 +16,6 @@ TIMEOUT = 1.5
 
 PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
 
-HEADERS = [
-    f"#profile-title:{PROFILE_TITLE}",
-    "#subscription-userinfo: upload=0; download=0; total=0; expire=0",
-    "#profile-update-interval: 1",
-    f"#support-url:{PROFILE_TITLE}",
-    f"#profile-web-page-url:{PROFILE_TITLE}",
-    f"#announce:{PROFILE_TITLE}"
-]
-
 
 def extract_vless(text):
     return list(set(re.findall(r'vless://[^\s]+', text)))
@@ -147,6 +138,16 @@ async def main():
     moscow_time = datetime.now(ZoneInfo("Europe/Moscow"))
     update_date = moscow_time.strftime("%Y-%m-%d")
 
+    # ====== ОБНОВЛЕННЫЕ HEADERS ======
+    headers = [
+        f"#profile-title:{PROFILE_TITLE}",
+        "#subscription-userinfo: upload=0; download=0; total=0; expire=0",
+        "#profile-update-interval: 1",
+        f"#support-url:{PROFILE_TITLE}",
+        f"#profile-web-page-url:{PROFILE_TITLE}",
+        f"#announce: 🚀 АКТИВНО: {len(alive)} | 📅 {update_date}"
+    ]
+
     final_lines = []
     for idx, (config, flag) in enumerate(alive, start=1):
         final_lines.append(
@@ -154,7 +155,7 @@ async def main():
         )
 
     print("Writing files...")
-    final_text = "\n".join(HEADERS + final_lines)
+    final_text = "\n".join(headers + final_lines)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(final_text)

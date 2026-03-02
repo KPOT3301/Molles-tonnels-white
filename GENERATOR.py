@@ -12,13 +12,15 @@ BASE64_FILE = "Molestunnels_base64.txt"
 CONCURRENCY = 300
 TIMEOUT = 1.5
 
+PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
+
 HEADERS = [
-    "#profile-title:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
+    f"#profile-title:{PROFILE_TITLE}",
     "#subscription-userinfo: upload=0; download=0; total=0; expire=0",
     "#profile-update-interval: 1",
-    "#support-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
-    "#profile-web-page-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
-    "#announce:🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+    f"#support-url:{PROFILE_TITLE}",
+    f"#profile-web-page-url:{PROFILE_TITLE}",
+    f"#announce:{PROFILE_TITLE}"
 ]
 
 

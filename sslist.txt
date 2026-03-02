@@ -1,0 +1,17 @@
+# лайм
+https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt
+
+# ZipVPN
+https://raw.githubusercontent.com/zipvpn/FreeVPNNodes/refs/heads/main/free_v2ray_xray_nodes.txt
+
+# 🔴 BLACKLIST
+https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/blacklist.txt
+
+# BLACK VLESS (RUS)
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt
+
+# ConfigForge V2Ray
+https://raw.githubusercontent.com/ShatakVPN/ConfigForge-V2Ray/main/configs/ru/all.txt
+
+# vpn-configs-for-russia
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt

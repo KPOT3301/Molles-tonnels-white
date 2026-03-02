@@ -1,17 +1,17 @@
-# лайм
-https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt
+# KFWL
+https://raw.githubusercontent.com/prominbro/KfWL/refs/heads/main/KfWL.txt
 
-# ZipVPN
-https://raw.githubusercontent.com/zipvpn/FreeVPNNodes/refs/heads/main/free_v2ray_xray_nodes.txt
+# VPN CONFIGURATOR FOR RUSSIA
+https://raw.githubusercontent.com/zieng2/wl/main/vless_universal.txt
 
-# 🔴 BLACKLIST
-https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/blacklist.txt
+# при белой пизде 
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
 
-# BLACK VLESS (RUS)
-https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS.txt
+# Обход белых списков от WL RUS
+https://wlrus.lol/confs/selected.txt
 
-# ConfigForge V2Ray
-https://raw.githubusercontent.com/ShatakVPN/ConfigForge-V2Ray/main/configs/ru/all.txt
+#LowiK
+https://gitverse.ru/api/repos/LowiK/LowiKLive/raw/branch/main/ObhodBSfree.txt
 
-# vpn-configs-for-russia
-https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/BLACK_VLESS_RUS_mobile.txt
+# 🟢 WHITELIST
+https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/whitelist.txt

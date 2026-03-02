@@ -4,6 +4,8 @@ import base64
 import socket
 import re
 from urllib.parse import urlparse
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
 INPUT_FILE = "sslist.txt"
 OUTPUT_FILE = "Molestunnels.txt"
@@ -141,9 +143,13 @@ async def main():
     print("Sorting and numbering...")
     alive.sort(key=lambda x: x[0])
 
+    # Московская дата
+    moscow_time = datetime.now(ZoneInfo("Europe/Moscow"))
+    update_date = moscow_time.strftime("%Y-%m-%d")
+
     final_lines = []
     for idx, (config, flag) in enumerate(alive, start=1):
-        final_lines.append(f"{config}#{flag} {idx:03d}")
+        final_lines.append(f"{config}#{flag} {idx:03d} | {update_date}")
 
     print("Writing files...")
     final_text = "\n".join(HEADERS + final_lines)

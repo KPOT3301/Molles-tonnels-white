@@ -18,3 +18,12 @@ https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads
 
 # GoodbyeWLALT
 https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
+
+# РОСТУНЕЛЬ
+https://subrostunnel.vercel.app/wl.txt
+
+# HAPP
+https://raw.githubusercontent.com/EvenSide/Vless/refs/heads/main/Keys.txt
+
+# CID_VPN
+https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelist.txt

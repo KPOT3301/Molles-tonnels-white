@@ -2,7 +2,6 @@ import asyncio
 import aiohttp
 import base64
 import socket
-import time
 import re
 from urllib.parse import urlparse
 
@@ -10,17 +9,16 @@ INPUT_FILE = "sslist.txt"
 OUTPUT_FILE = "Molestunnels.txt"
 BASE64_FILE = "Molestunnels_base64.txt"
 
-MAX_WORKING = 500
 CONCURRENCY = 300
 TIMEOUT = 1.5
 
 HEADERS = [
-"#profile-title:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
-"#subscription-userinfo: upload=0; download=0; total=0; expire=0",
-"#profile-update-interval: 1",
-"#support-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
-"#profile-web-page-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
-"#announce:🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+    "#profile-title:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
+    "#subscription-userinfo: upload=0; download=0; total=0; expire=0",
+    "#profile-update-interval: 1",
+    "#support-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
+    "#profile-web-page-url:🇷🇺КРОТовыеТОННЕЛИ🇷🇺",
+    "#announce:🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
 ]
 
 
@@ -64,9 +62,6 @@ async def check_once(host, port):
 
 
 async def check_server(config, semaphore, session):
-    if check_server.counter >= MAX_WORKING:
-        return None
-
     try:
         parsed = urlparse(config)
         host = parsed.hostname
@@ -94,19 +89,11 @@ async def check_server(config, semaphore, session):
 
             flag = await fetch_country(session, ip)
 
-            check_server.counter += 1
-            number = check_server.counter
-
-            print(f"Alive ({number}): {host}:{port} {flag}")
-
             clean_config = config.split("#")[0]
-            return f"{clean_config}#{flag} {number:03d}"
+            return clean_config, flag
 
     except:
         return None
-
-
-check_server.counter = 0
 
 
 async def main():
@@ -120,6 +107,8 @@ async def main():
         return
 
     async with aiohttp.ClientSession() as session:
+
+        print("Fetching source contents...")
         tasks = [fetch(session, url) for url in sources]
         results = await asyncio.gather(*tasks)
 
@@ -135,7 +124,6 @@ async def main():
         semaphore = asyncio.Semaphore(CONCURRENCY)
 
         print("Checking servers...")
-
         tasks = [check_server(cfg, semaphore, session) for cfg in all_configs]
         checked = await asyncio.gather(*tasks)
 
@@ -148,11 +136,15 @@ async def main():
         print("Abort overwrite to protect subscription.")
         exit(1)
 
-    alive.sort()
+    print("Sorting and numbering...")
+    alive.sort(key=lambda x: x[0])
+
+    final_lines = []
+    for idx, (config, flag) in enumerate(alive, start=1):
+        final_lines.append(f"{config}#{flag} {idx:03d}")
 
     print("Writing files...")
-
-    final_text = "\n".join(HEADERS + alive)
+    final_text = "\n".join(HEADERS + final_lines)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:
         f.write(final_text)

@@ -134,11 +134,11 @@ async def main():
     print("Sorting and numbering...")
     alive.sort(key=lambda x: x[0])
 
-    # Московская дата
+    # ===== МОСКОВСКАЯ ДАТА В ФОРМАТЕ 02-03-2026 =====
     moscow_time = datetime.now(ZoneInfo("Europe/Moscow"))
-    update_date = moscow_time.strftime("%Y-%m-%d")
+    update_date = moscow_time.strftime("%d-%m-%Y")
 
-    # ====== ОБНОВЛЕННЫЕ HEADERS ======
+    # ===== HEADERS =====
     headers = [
         f"#profile-title:{PROFILE_TITLE}",
         "#subscription-userinfo: upload=0; download=0; total=0; expire=0",
@@ -149,12 +149,14 @@ async def main():
     ]
 
     final_lines = []
+
     for idx, (config, flag) in enumerate(alive, start=1):
         final_lines.append(
             f"{config}#{flag} СЕРВЕР {idx:03d} | ОБНОВЛЕН {update_date}"
         )
 
     print("Writing files...")
+
     final_text = "\n".join(headers + final_lines)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as f:

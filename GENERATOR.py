@@ -149,7 +149,9 @@ async def main():
 
     final_lines = []
     for idx, (config, flag) in enumerate(alive, start=1):
-        final_lines.append(f"{config}#{flag} {idx:03d} | {update_date}")
+        final_lines.append(
+            f"{config}#{flag} СЕРВЕР {idx:03d} | ОБНОВЛЕН {update_date}"
+        )
 
     print("Writing files...")
     final_text = "\n".join(HEADERS + final_lines)

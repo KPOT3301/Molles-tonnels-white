@@ -1,2 +1,3 @@
 #🟢 WHITELIST
 https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/whitelist.txt
+#LowiK

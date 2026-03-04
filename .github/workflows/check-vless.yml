@@ -39,6 +39,5 @@ jobs:
           git add subscription.txt
           git diff --quiet && git diff --staged --quiet || (
             git commit -m "Auto-update subscription.txt"
-            git remote set-url origin https://${{ secrets.PAT }}@github.com/${{ github.repository }}.git
-            git push origin HEAD:${{ github.ref }}
+            git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:${{ github.ref }}
           )

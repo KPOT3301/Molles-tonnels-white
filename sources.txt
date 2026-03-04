@@ -1,7 +1,7 @@
 #🟢 WHITELIST
 https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/whitelist.txt
 #LowiK
-
+https://gitverse.ru/api/repos/LowiK/LowiKLive/raw/branch/main/ObhodBSfree.txt
 #📄 Обход белых списков от WL RUS
 https://wlrus.lol/confs/selected.txt
 #при белой пизде Vless-Reality-White-Lists-Rus-Mobile

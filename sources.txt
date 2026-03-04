@@ -18,3 +18,5 @@ https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/w
 https://subrostunnel.vercel.app/wl.txt
 #GoodbyeWL
 https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
+#ростунель антишатдаун
+https://subrostunnel.vercel.app/wl.txt

@@ -29,9 +29,9 @@ except ImportError:
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ---------- Константы для оформления подписки ----------
-PROFILE_TITLE = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-SUPPORT_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-PROFILE_WEB_PAGE_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
+SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
+PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 

@@ -14,3 +14,7 @@ https://raw.githubusercontent.com/prominbro/KfWL/refs/heads/main/KfWL.txt
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt
 #LIBERTY
 https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/white-list_available
+#РОСТУНЕЛЬ
+https://subrostunnel.vercel.app/wl.txt
+#GoodbyeWL
+https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc

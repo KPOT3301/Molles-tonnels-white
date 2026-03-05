@@ -49,9 +49,9 @@ except ImportError:
     logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены. Установите: pip install geoip2")
 
 # ---------- Константы для оформления подписки ----------
-PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
-SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
-PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
+PROFILE_TITLE = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+SUPPORT_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+PROFILE_WEB_PAGE_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 
@@ -217,6 +217,9 @@ def parse_vless_link(link):
         if security == 'tsl':
             security = 'tls'
 
+        # Явно указанный SNI (если есть)
+        explicit_sni = params.get('sni', [None])[0]
+
         config = {
             'protocol': 'vless',
             'uuid': uuid,
@@ -225,7 +228,10 @@ def parse_vless_link(link):
             'security': security,
             'encryption': params.get('encryption', ['none'])[0],
             'type': params.get('type', ['tcp'])[0],
-            'sni': params.get('sni', [host])[0],
+            # Для Xray всегда нужно значение sni (явное или host)
+            'sni': explicit_sni if explicit_sni else host,
+            # Явный SNI для тега
+            'explicit_sni': explicit_sni,
             'fp': params.get('fp', ['chrome'])[0],
             'pbk': params.get('pbk', [''])[0],
             'sid': params.get('sid', [''])[0],
@@ -290,7 +296,8 @@ def parse_ss_link(link):
             'port': port,
             'method': method,
             'password': password,
-            'original': link
+            'original': link,
+            'explicit_sni': None   # у Shadowsocks нет SNI
         }
     except Exception as e:
         logging.debug(f"Ошибка парсинга SS-ссылки {link[:50]}...: {e}")
@@ -310,7 +317,18 @@ def parse_trojan_link(link):
         port = parsed.port or 443
         params = parse_qs(parsed.query)
 
-        sni = params.get('peer', [None])[0] or params.get('sni', [host])[0]
+        # Явный SNI (peer или sni)
+        peer_param = params.get('peer')
+        sni_param = params.get('sni')
+        explicit_sni = None
+        if peer_param:
+            explicit_sni = peer_param[0]
+        elif sni_param:
+            explicit_sni = sni_param[0]
+
+        # Для совместимости оставляем поле sni (всегда заполнено)
+        sni = explicit_sni if explicit_sni else host
+
         allow_insecure = params.get('allowInsecure', ['0'])[0].lower() in ('1', 'true', 'yes')
         network = params.get('type', ['tcp'])[0]
         security = params.get('security', ['tls'])[0]
@@ -321,6 +339,7 @@ def parse_trojan_link(link):
             'port': port,
             'password': password,
             'sni': sni,
+            'explicit_sni': explicit_sni,
             'allow_insecure': allow_insecure,
             'network': network,
             'security': security,
@@ -584,8 +603,7 @@ def filter_working_links(links):
 def save_working_links(links):
     """
     Сохраняет рабочие ссылки в subscription.txt с красивыми заголовками.
-    Каждая ссылка получает тег с номером, флагом страны и датой.
-    Используется глобальная TODAY_STR, определённая в начале скрипта.
+    Каждая ссылка получает тег с номером, флагом страны, явным SNI (если есть) и датой.
     """
     logging.info(f"💾 Сохраняю {len(links)} рабочих ссылок в {OUTPUT_FILE}")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -604,21 +622,33 @@ def save_working_links(links):
             link = re.sub(r'#.*$', '', link)
             server_num = f"{idx:04d}"
 
-            # Определяем флаг страны
-            flag = ""
+            # Парсим ссылку для получения информации
             config = parse_link(link)
+            flag = ""
+            sni_part = None
+
             if config:
+                # Получаем флаг страны по IP хоста
                 try:
                     ip = resolve_host(config['host'])
                     flag = get_country_flag(ip)
                 except Exception:
                     pass
 
+                # Явно указанный SNI
+                explicit_sni = config.get('explicit_sni')
+                if explicit_sni:
+                    sni_part = f"SNI- {explicit_sni}"
+
             # Формируем тег
+            tag_parts = [f"#СЕРВЕР {server_num}"]
             if flag:
-                tag = f"#СЕРВЕР {server_num} | {flag} | ОБНОВЛЕН {TODAY_STR}"
-            else:
-                tag = f"#СЕРВЕР {server_num} | ОБНОВЛЕН {TODAY_STR}"
+                tag_parts.append(flag)
+            if sni_part:
+                tag_parts.append(sni_part)
+            tag_parts.append(f"ОБНОВЛЕН {TODAY_STR}")
+
+            tag = " | ".join(tag_parts)
 
             f.write(link + tag + '\n')
 

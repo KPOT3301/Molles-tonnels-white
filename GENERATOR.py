@@ -79,7 +79,7 @@ TEST_URLS = [
     "http://cp.cloudflare.com/generate_204"
 ]
 
-MAX_LATENCY_MS = 500   # 0.5 секунды
+MAX_LATENCY_MS = 1000   # 1 секунды
 ONLY_TCP = False
 
 # ---------- GeoIP ----------
@@ -603,7 +603,8 @@ def filter_working_links(links):
 def save_working_links(links):
     """
     Сохраняет рабочие ссылки в subscription.txt с красивыми заголовками.
-    Каждая ссылка получает тег с номером, флагом страны, явным SNI (если есть) и датой.
+    Каждая ссылка получает тег с номером, флагом страны, явным SNI (если есть).
+    Дата убрана из названия сервера, оставлена только в аннонсе.
     """
     logging.info(f"💾 Сохраняю {len(links)} рабочих ссылок в {OUTPUT_FILE}")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -613,7 +614,7 @@ def save_working_links(links):
         f.write(f"#profile-update-interval:{PROFILE_UPDATE_INTERVAL}\n")
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
-        # Аннонс с эмодзи
+        # Аннонс с эмодзи (дата здесь остаётся)
         f.write(f"#announce: АКТИВНЫХ СЕРВЕРОВ 🚀 {len(links)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
 
         # Сами ссылки с нумерацией и флагами
@@ -640,14 +641,13 @@ def save_working_links(links):
                 if explicit_sni:
                     sni_part = f"SNI- {explicit_sni}"
 
-            # Формируем тег
-            tag_parts = [f"#СЕРВЕР {server_num}"]
+            # Формируем тег — убрана дата, префикс изменён на 🔑📡
+            tag_parts = [f"#🔑📡 {server_num}"]
             if flag:
                 tag_parts.append(flag)
             if sni_part:
                 tag_parts.append(sni_part)
-            tag_parts.append(f"ОБНОВЛЕН {TODAY_STR}")
-
+            # Дата больше не добавляется
             tag = " | ".join(tag_parts)
 
             f.write(link + tag + '\n')

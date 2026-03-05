@@ -49,9 +49,9 @@ except ImportError:
     logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены. Установите: pip install geoip2")
 
 # ---------- Константы для оформления подписки ----------
-PROFILE_TITLE = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-SUPPORT_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-PROFILE_WEB_PAGE_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
+SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
+PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 

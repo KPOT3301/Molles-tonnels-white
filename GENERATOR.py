@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран
 # Оптимизация: флаг определяется сразу после TCP, реальная проверка только для серверов с флагом
-# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймаут 8с, один тестовый URL
+# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты увеличены до 10с, один тестовый URL
 
 import re
 import socket
@@ -67,15 +67,15 @@ REQUEST_TIMEOUT = 10
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
-# TCP-проверка
-TCP_CHECK_TIMEOUT = 2
+# TCP-проверка (увеличен таймаут для более мягкого отбора)
+TCP_CHECK_TIMEOUT = 10                # было 2
 TCP_MAX_WORKERS = 400
 
-# Реальная проверка
+# Реальная проверка (увеличен таймаут для более мягкого отбора)
 SOCKS_PORT = 8080
-REAL_CHECK_TIMEOUT = 8                # сократили с 12
-REAL_CHECK_CONCURRENCY = 30            # увеличили до 30
-XRAY_STARTUP_DELAY = 1                 # сократили с 2
+REAL_CHECK_TIMEOUT = 10               # было 8
+REAL_CHECK_CONCURRENCY = 30
+XRAY_STARTUP_DELAY = 1
 RETRY_COUNT = 0
 
 TEST_URLS = [
@@ -634,7 +634,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок")
+    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=10с)")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

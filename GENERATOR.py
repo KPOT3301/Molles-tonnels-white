@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран
 # Оптимизация: флаг определяется сразу после TCP, реальная проверка только для серверов с флагом
-# Логи TCP убраны, остаётся только итог этапа
+# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймаут 8с, один тестовый URL
 
 import re
 import socket
@@ -73,17 +73,16 @@ TCP_MAX_WORKERS = 400
 
 # Реальная проверка
 SOCKS_PORT = 8080
-REAL_CHECK_TIMEOUT = 12
-REAL_CHECK_CONCURRENCY = 9
-XRAY_STARTUP_DELAY = 2
+REAL_CHECK_TIMEOUT = 8                # сократили с 12
+REAL_CHECK_CONCURRENCY = 30            # увеличили до 30
+XRAY_STARTUP_DELAY = 1                 # сократили с 2
 RETRY_COUNT = 0
 
 TEST_URLS = [
-    "http://connectivitycheck.gstatic.com/generate_204",
-    "http://cp.cloudflare.com/generate_204"
+    "http://connectivitycheck.gstatic.com/generate_204"   # один быстрый URL
 ]
 
-MAX_LATENCY_MS = 1000
+MAX_LATENCY_MS = 1500
 ONLY_TCP = False
 
 # ---------- GEOIP ----------
@@ -502,7 +501,6 @@ def filter_working_links(links):
         future_to_link = {executor.submit(check_tcp, link): link for link in links}
         for future in as_completed(future_to_link):
             current_check += 1
-            # record_counter не увеличиваем – нумерация только для реальных проверок
             link, ok, ip = future.result()
             if ok:
                 tcp_success.append((link, ip))
@@ -528,7 +526,6 @@ def filter_working_links(links):
         return []
 
     if ONLY_TCP:
-        # В режиме ONLY_TCP возвращаем серверы с флагами без реальной проверки
         logging.info("⏩ Режим ONLY_TCP – реальная проверка пропущена")
         return links_with_flags
 
@@ -650,7 +647,6 @@ def main():
     if not all_links:
         return
 
-    # Сброс счётчиков
     record_counter = 0
     current_check = 0
     total_checks = len(all_links)

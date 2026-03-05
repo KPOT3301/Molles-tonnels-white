@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран (эмодзи)
+# Версия с поддержкой часового пояса для даты в подписке
 
 import re
 import socket
@@ -14,6 +15,17 @@ from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime
+
+# Попытка импорта zoneinfo для локального времени
+try:
+    from zoneinfo import ZoneInfo
+    TIMEZONE = "Asia/Yekaterinburg"  # ⬅️ измените на свой (например, Europe/Moscow)
+    LOCAL_NOW = datetime.now(ZoneInfo(TIMEZONE))
+    logging.info(f"🕐 Используется часовой пояс: {TIMEZONE}")
+except ImportError:
+    LOCAL_NOW = datetime.utcnow()
+    logging.warning("⚠️ Библиотека zoneinfo не найдена, используется UTC для даты в подписке.")
+TODAY_STR = LOCAL_NOW.strftime("%d-%m-%Y")
 
 import requests
 
@@ -559,8 +571,8 @@ def save_working_links(links):
     """
     Сохраняет рабочие ссылки в subscription.txt с красивыми заголовками.
     Каждая ссылка получает тег с номером, флагом страны и датой.
+    Используется глобальная TODAY_STR, определённая в начале скрипта.
     """
-    today = datetime.now().strftime("%d-%m-%Y")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         # Заголовки подписки
         f.write(f"#profile-title:{PROFILE_TITLE}\n")
@@ -569,7 +581,7 @@ def save_working_links(links):
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
         # Аннонс с эмодзи
-        f.write(f"#announce: АКТИВНЫХ СЕРВЕРОВ 🚀 {len(links)} | ОБНОВЛЕНО 📅 {today}\n")
+        f.write(f"#announce: АКТИВНЫХ СЕРВЕРОВ 🚀 {len(links)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
 
         # Сами ссылки с нумерацией и флагами
         for idx, link in enumerate(links, start=1):
@@ -589,9 +601,9 @@ def save_working_links(links):
 
             # Формируем тег
             if flag:
-                tag = f"#СЕРВЕР {server_num} | {flag} | ОБНОВЛЕН {today}"
+                tag = f"#СЕРВЕР {server_num} | {flag} | ОБНОВЛЕН {TODAY_STR}"
             else:
-                tag = f"#СЕРВЕР {server_num} | ОБНОВЛЕН {today}"
+                tag = f"#СЕРВЕР {server_num} | ОБНОВЛЕН {TODAY_STR}"
 
             f.write(link + tag + '\n')
 

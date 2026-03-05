@@ -11,10 +11,21 @@ import time
 import json
 import tempfile
 import os
+import sys
 from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime
+
+# ---------- НАСТРОЙКА ЛОГИРОВАНИЯ (ВЫВОД В STDOUT, СБРОС ПОСЛЕ КАЖДОЙ ЗАПИСИ) ----------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)  # <-- теперь логи идут в stdout
+    ],
+    force=True  # переопределяет предыдущие настройки
+)
 
 # Попытка импорта zoneinfo для локального времени
 try:
@@ -36,9 +47,6 @@ try:
 except ImportError:
     GEOIP_AVAILABLE = False
     logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены. Установите: pip install geoip2")
-
-# Настройка логирования
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # ---------- Константы для оформления подписки ----------
 PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
@@ -126,6 +134,7 @@ def resolve_host(host):
     return socket.gethostbyname(host)
 
 def read_sources():
+    logging.info("📖 Чтение файла sources.txt...")
     sources = []
     try:
         with open(SOURCES_FILE, 'r', encoding='utf-8') as f:
@@ -139,10 +148,12 @@ def read_sources():
     return sources
 
 def fetch_content(url):
+    logging.info(f"⬇️ Загружаю источник: {url}")
     try:
         headers = {'User-Agent': USER_AGENT}
         resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=headers)
         resp.raise_for_status()
+        logging.info(f"✅ Загружено {len(resp.text)} байт из {url}")
         return resp.text
     except Exception as e:
         logging.warning(f"⚠️ Не удалось загрузить {url}: {e}")
@@ -161,8 +172,10 @@ def decode_base64_content(encoded):
         return encoded
 
 def gather_all_links(sources):
+    logging.info(f"🔍 Начинаю сбор ссылок из {len(sources)} источников...")
     all_links = set()
-    for src in sources:
+    for idx, src in enumerate(sources, 1):
+        logging.info(f"📦 Обработка источника [{idx}/{len(sources)}]: {src[:60]}...")
         if src.startswith(('vless://', 'ss://', 'trojan://')):
             all_links.add(src)
             continue
@@ -522,6 +535,7 @@ def check_real(link):
 
 def filter_working_links(links):
     total = len(links)
+    logging.info(f"🚀 Начинаю фильтрацию {total} ссылок")
 
     # Этап 1: TCP-проверка
     logging.info(f"🌐 Этап 1: TCP-проверка {total} ссылок (параллельность {TCP_MAX_WORKERS}, таймаут {TCP_CHECK_TIMEOUT}с)...")
@@ -573,6 +587,7 @@ def save_working_links(links):
     Каждая ссылка получает тег с номером, флагом страны и датой.
     Используется глобальная TODAY_STR, определённая в начале скрипта.
     """
+    logging.info(f"💾 Сохраняю {len(links)} рабочих ссылок в {OUTPUT_FILE}")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         # Заголовки подписки
         f.write(f"#profile-title:{PROFILE_TITLE}\n")
@@ -622,6 +637,7 @@ def create_base64_subscription():
         logging.error(f"❌ Ошибка при создании Base64-версии: {e}")
 
 def check_xray_available():
+    logging.info("🔍 Проверка наличия Xray-core...")
     try:
         result = subprocess.run([XRAY_CORE_PATH, '--version'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
@@ -638,6 +654,7 @@ def check_xray_available():
         return False
 
 def main():
+    logging.info("🟢 Запуск генератора подписок")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return
@@ -659,6 +676,7 @@ def main():
         logging.warning("Нет рабочих ссылок – Base64-версия не создана.")
 
     logging.info(f"📊 Итог: {len(working_links)} рабочих из {len(all_links)} проверенных")
+    logging.info("🏁 Работа завершена")
 
 if __name__ == "__main__":
     main()

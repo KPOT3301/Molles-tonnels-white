@@ -20,3 +20,6 @@ https://subrostunnel.vercel.app/wl.txt
 https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
 #ростунель антишатдаун
 https://subrostunnel.vercel.app/wl.txt
+#🏳️ БЕЛЫЕ СПИСКИ 🏳️ WHITE LISTS | CIDR | Mobile-150-(1-2)
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt

@@ -73,10 +73,10 @@ TCP_MAX_WORKERS = 400
 
 # Реальная проверка (увеличен таймаут для более мягкого отбора)
 SOCKS_PORT = 8080
-REAL_CHECK_TIMEOUT = 10               # было 8
+REAL_CHECK_TIMEOUT = 15               # было 8 → теперь 15
 REAL_CHECK_CONCURRENCY = 30
 XRAY_STARTUP_DELAY = 1
-RETRY_COUNT = 0
+RETRY_COUNT = 2                        # было 0 → теперь 2
 
 TEST_URLS = [
     "http://connectivitycheck.gstatic.com/generate_204"   # один быстрый URL
@@ -376,7 +376,7 @@ def create_xray_config(config):
         elif config['security'] == 'reality':
             outbound["streamSettings"]["realitySettings"] = {
                 "serverName": config.get('sni', config['host']),
-                "fingerprint": config.get('fp', 'chrome'),
+                "fingerprint": config.get('fp', 'random'),   # изменено на 'random' для смягчения
                 "publicKey": config.get('pbk', ''),
                 "shortId": config.get('sid', ''),
                 "spiderX": config.get('spx', '/')
@@ -440,7 +440,7 @@ def check_tcp(link):
     except:
         return (link, False, None)
 
-# ---------- РЕАЛЬНАЯ ПРОВЕРКА ----------
+# ---------- РЕАЛЬНАЯ ПРОВЕРКА (с повторными попытками и любым HTTP-статусом) ----------
 def check_real(link):
     config_dict = parse_link(link)
     if not config_dict:
@@ -448,9 +448,11 @@ def check_real(link):
     xray_config = create_xray_config(config_dict)
     if not xray_config:
         return (link, False, None)
+
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
         config_path = f.name
         json.dump(xray_config, f, indent=2)
+
     process = None
     try:
         process = subprocess.Popen(
@@ -462,19 +464,28 @@ def check_real(link):
             'http': f'socks5h://127.0.0.1:{SOCKS_PORT}',
             'https': f'socks5h://127.0.0.1:{SOCKS_PORT}'
         }
-        for test_url in TEST_URLS:
-            try:
-                start = time.time()
-                resp = requests.get(
-                    test_url, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
-                    headers={'User-Agent': USER_AGENT}, allow_redirects=False
-                )
-                latency = int((time.time() - start) * 1000)
-                if resp.status_code == 204:
+
+        # Цикл повторных попыток
+        for attempt in range(RETRY_COUNT + 1):
+            for test_url in TEST_URLS:
+                try:
+                    start = time.time()
+                    resp = requests.get(
+                        test_url, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
+                        headers={'User-Agent': USER_AGENT}, allow_redirects=False
+                    )
+                    latency = int((time.time() - start) * 1000)
+                    # Любой ответ (даже с ошибкой) считаем успехом, т.к. соединение через прокси установлено
                     return (link, True, latency)
-            except:
-                continue
+                except Exception:
+                    # Пробуем следующий URL
+                    continue
+            # Если все URL не сработали на этой попытке, делаем паузу перед следующей
+            time.sleep(1)
+
+        # Если все попытки исчерпаны
         return (link, False, None)
+
     except Exception as e:
         logging.debug(f"Ошибка при проверке {link[:60]}: {e}")
         return (link, False, None)
@@ -634,7 +645,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=10с)")
+    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=15с, повторы=2)")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

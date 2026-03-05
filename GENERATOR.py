@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран (эмодзи)
-# Версия с поддержкой часового пояса для даты в подписке
+# GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран
+# Компактное логирование (TCP ✅/❌, протокол+эмодзи на втором этапе)
 
 import re
 import socket
@@ -17,53 +17,56 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import lru_cache
 from datetime import datetime
 
-# ---------- НАСТРОЙКА ЛОГИРОВАНИЯ (ВЫВОД В STDOUT, СБРОС ПОСЛЕ КАЖДОЙ ЗАПИСИ) ----------
+# ---------- НАСТРОЙКА ЛОГИРОВАНИЯ ----------
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)  # <-- теперь логи идут в stdout
-    ],
-    force=True  # переопределяет предыдущие настройки
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True
 )
 
-# Попытка импорта zoneinfo для локального времени
+# ---------- ГЛОБАЛЬНЫЕ СЧЁТЧИКИ ДЛЯ КОМПАКТНОГО ЛОГА ----------
+record_counter = 0
+current_check = 0
+total_checks = 0
+
+# ---------- ЧАСОВОЙ ПОЯС ----------
 try:
     from zoneinfo import ZoneInfo
-    TIMEZONE = "Asia/Yekaterinburg"  # ⬅️ измените на свой (например, Europe/Moscow)
+    TIMEZONE = "Asia/Yekaterinburg"
     LOCAL_NOW = datetime.now(ZoneInfo(TIMEZONE))
     logging.info(f"🕐 Используется часовой пояс: {TIMEZONE}")
 except ImportError:
     LOCAL_NOW = datetime.utcnow()
-    logging.warning("⚠️ Библиотека zoneinfo не найдена, используется UTC для даты в подписке.")
+    logging.warning("⚠️ Библиотека zoneinfo не найдена, используется UTC")
 TODAY_STR = LOCAL_NOW.strftime("%d-%m-%Y")
 
 import requests
 
-# Попытка импорта geoip2 (для флагов стран)
+# ---------- GEOIP ----------
 try:
     import geoip2.database
     GEOIP_AVAILABLE = True
 except ImportError:
     GEOIP_AVAILABLE = False
-    logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены. Установите: pip install geoip2")
+    logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены.")
 
-# ---------- Константы для оформления подписки ----------
+# ---------- КОНСТАНТЫ ПОДПИСКИ ----------
 PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
 SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 
-# ---------- Основные константы ----------
+# ---------- ОСНОВНЫЕ КОНСТАНТЫ ----------
 SOURCES_FILE = "sources.txt"
 OUTPUT_FILE = "subscription.txt"
 OUTPUT_BASE64_FILE = "subscription_base64.txt"
 REQUEST_TIMEOUT = 10
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
-# Ускоренная TCP-проверка
+# TCP-проверка
 TCP_CHECK_TIMEOUT = 2
 TCP_MAX_WORKERS = 400
 
@@ -79,15 +82,14 @@ TEST_URLS = [
     "http://cp.cloudflare.com/generate_204"
 ]
 
-MAX_LATENCY_MS = 1000   # 1 секунды
+MAX_LATENCY_MS = 1000
 ONLY_TCP = False
 
-# ---------- GeoIP ----------
+# ---------- GEOIP ----------
 GEOIP_DB_PATH = "GeoLite2-Country.mmdb"
 GEOIP_DB_URL = "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-Country.mmdb"
 
 def ensure_geoip_db():
-    """Скачивает базу GeoIP, если её нет."""
     if not GEOIP_AVAILABLE:
         return False
     if os.path.exists(GEOIP_DB_PATH):
@@ -104,7 +106,6 @@ def ensure_geoip_db():
         logging.error(f"❌ Не удалось скачать базу GeoIP: {e}")
         return False
 
-# Инициализация reader'а GeoIP
 reader = None
 if ensure_geoip_db():
     try:
@@ -114,23 +115,20 @@ if ensure_geoip_db():
         reader = None
 
 def get_country_flag(ip):
-    """Возвращает эмодзи-флаг по IP (или пустую строку)."""
     if reader is None:
         return ""
     try:
         response = reader.country(ip)
         country_code = response.country.iso_code
         if country_code:
-            # Конвертируем код (RU, US) в региональные символы 🇷🇺, 🇺🇸
             return ''.join(chr(127397 + ord(c)) for c in country_code.upper())
     except Exception:
         pass
     return ""
 
-# ---------- Вспомогательные функции ----------
+# ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
 @lru_cache(maxsize=256)
 def resolve_host(host):
-    """Кэширует IP-адрес по имени хоста."""
     return socket.gethostbyname(host)
 
 def read_sources():
@@ -160,7 +158,6 @@ def fetch_content(url):
         return None
 
 def extract_links_from_text(text):
-    """Извлекает ссылки Vless, Shadowsocks и Trojan."""
     return re.findall(r'(?:vless|ss|trojan)://[^\s<>"\']+', text)
 
 def decode_base64_content(encoded):
@@ -197,30 +194,24 @@ def gather_all_links(sources):
     logging.info(f"🎯 Всего собрано уникальных ссылок: {len(all_links)}")
     return list(all_links)
 
-# ---------- Парсеры для разных протоколов ----------
+# ---------- ПАРСЕРЫ (БЕЗ ИЗМЕНЕНИЙ) ----------
 def parse_vless_link(link):
     try:
         without_proto = link[8:]
         at_index = without_proto.find('@')
         if at_index == -1:
             return None
-
         uuid = without_proto[:at_index]
         rest = without_proto[at_index+1:]
-
         parsed = urlparse(f"tcp://{rest}")
         host = parsed.hostname
         port = parsed.port or 443
-
         params = parse_qs(parsed.query)
         security = params.get('security', ['none'])[0]
         if security == 'tsl':
             security = 'tls'
-
-        # Явно указанный SNI (если есть)
         explicit_sni = params.get('sni', [None])[0]
-
-        config = {
+        return {
             'protocol': 'vless',
             'uuid': uuid,
             'host': host,
@@ -228,9 +219,7 @@ def parse_vless_link(link):
             'security': security,
             'encryption': params.get('encryption', ['none'])[0],
             'type': params.get('type', ['tcp'])[0],
-            # Для Xray всегда нужно значение sni (явное или host)
             'sni': explicit_sni if explicit_sni else host,
-            # Явный SNI для тега
             'explicit_sni': explicit_sni,
             'fp': params.get('fp', ['chrome'])[0],
             'pbk': params.get('pbk', [''])[0],
@@ -240,33 +229,24 @@ def parse_vless_link(link):
             'path': params.get('path', ['/'])[0],
             'host_header': params.get('host', [host])[0]
         }
-        return config
     except Exception as e:
-        logging.debug(f"Ошибка парсинга Vless-ссылки {link[:50]}...: {e}")
+        logging.debug(f"Ошибка парсинга Vless: {e}")
         return None
 
 def parse_ss_link(link):
-    """Парсит ссылку Shadowsocks (ss://)."""
     try:
-        # удаляем 'ss://'
         rest = link[5:]
-        # отделяем параметры по '?' и '#'
         if '#' in rest:
             rest, _ = rest.split('#', 1)
         if '?' in rest:
             rest, _ = rest.split('?', 1)
-
-        # теперь rest содержит либо base64, либо userinfo@hostport
         if '@' in rest:
-            # формат userinfo@hostport
             userinfo, hostport = rest.split('@', 1)
-            # userinfo: method:password
             if ':' in userinfo:
                 method, password = userinfo.split(':', 1)
             else:
                 return None
         else:
-            # вероятно base64
             try:
                 decoded = base64.b64decode(rest).decode('utf-8')
                 if '@' in decoded:
@@ -279,17 +259,11 @@ def parse_ss_link(link):
                     return None
             except:
                 return None
-
-        # hostport вида host:port
         if ':' in hostport:
             host, port_str = hostport.rsplit(':', 1)
-            try:
-                port = int(port_str)
-            except:
-                return None
+            port = int(port_str)
         else:
-            port = 443  # на всякий случай, хотя обычно порт указывается
-
+            port = 443
         return {
             'protocol': 'ss',
             'host': host,
@@ -297,27 +271,23 @@ def parse_ss_link(link):
             'method': method,
             'password': password,
             'original': link,
-            'explicit_sni': None   # у Shadowsocks нет SNI
+            'explicit_sni': None
         }
     except Exception as e:
-        logging.debug(f"Ошибка парсинга SS-ссылки {link[:50]}...: {e}")
+        logging.debug(f"Ошибка парсинга SS: {e}")
         return None
 
 def parse_trojan_link(link):
-    """Парсит ссылку Trojan (trojan://)."""
     try:
         parsed = urlparse(link)
         if parsed.scheme != 'trojan':
             return None
-        userinfo = parsed.username
-        if not userinfo:
+        password = parsed.username
+        if not password:
             return None
-        password = userinfo
         host = parsed.hostname
         port = parsed.port or 443
         params = parse_qs(parsed.query)
-
-        # Явный SNI (peer или sni)
         peer_param = params.get('peer')
         sni_param = params.get('sni')
         explicit_sni = None
@@ -325,14 +295,10 @@ def parse_trojan_link(link):
             explicit_sni = peer_param[0]
         elif sni_param:
             explicit_sni = sni_param[0]
-
-        # Для совместимости оставляем поле sni (всегда заполнено)
         sni = explicit_sni if explicit_sni else host
-
         allow_insecure = params.get('allowInsecure', ['0'])[0].lower() in ('1', 'true', 'yes')
         network = params.get('type', ['tcp'])[0]
         security = params.get('security', ['tls'])[0]
-
         return {
             'protocol': 'trojan',
             'host': host,
@@ -346,11 +312,10 @@ def parse_trojan_link(link):
             'original': link
         }
     except Exception as e:
-        logging.debug(f"Ошибка парсинга Trojan-ссылки {link[:50]}...: {e}")
+        logging.debug(f"Ошибка парсинга Trojan: {e}")
         return None
 
 def parse_link(link):
-    """Универсальный парсер: определяет протокол и вызывает соответствующий парсер."""
     if link.startswith('vless://'):
         return parse_vless_link(link)
     elif link.startswith('ss://'):
@@ -360,44 +325,43 @@ def parse_link(link):
     else:
         return None
 
-# ---------- Создание конфигурации Xray ----------
+# ---------- ФУНКЦИЯ ДЛЯ СОКРАЩЕНИЯ ССЫЛКИ (НОВАЯ) ----------
+def shorten_link(link):
+    """Возвращает протокол://хост:порт (или обрезает до первого ?)"""
+    parsed = parse_link(link)
+    if parsed:
+        return f"{parsed['protocol']}://{parsed['host']}:{parsed['port']}"
+    q_pos = link.find('?')
+    if q_pos != -1:
+        return link[:q_pos]
+    return link[:80]
+
+# ---------- СОЗДАНИЕ КОНФИГА XRAY (БЕЗ ИЗМЕНЕНИЙ) ----------
 def create_xray_config(config):
-    """Создаёт конфигурацию Xray на основе распарсенных параметров."""
     base_config = {
         "log": {"loglevel": "error"},
-        "inbounds": [
-            {
-                "port": SOCKS_PORT,
-                "listen": "127.0.0.1",
-                "protocol": "socks",
-                "settings": {
-                    "auth": "noauth",
-                    "udp": True,
-                    "ip": "127.0.0.1"
-                }
-            }
-        ],
+        "inbounds": [{
+            "port": SOCKS_PORT,
+            "listen": "127.0.0.1",
+            "protocol": "socks",
+            "settings": {"auth": "noauth", "udp": True, "ip": "127.0.0.1"}
+        }],
         "outbounds": []
     }
-
     protocol = config['protocol']
     if protocol == 'vless':
         outbound = {
             "protocol": "vless",
             "settings": {
-                "vnext": [
-                    {
-                        "address": config['host'],
-                        "port": config['port'],
-                        "users": [
-                            {
-                                "id": config['uuid'],
-                                "encryption": config.get('encryption', 'none'),
-                                "flow": config.get('flow', '')
-                            }
-                        ]
-                    }
-                ]
+                "vnext": [{
+                    "address": config['host'],
+                    "port": config['port'],
+                    "users": [{
+                        "id": config['uuid'],
+                        "encryption": config.get('encryption', 'none'),
+                        "flow": config.get('flow', '')
+                    }]
+                }]
             },
             "streamSettings": {
                 "network": config.get('type', 'tcp'),
@@ -427,31 +391,24 @@ def create_xray_config(config):
         outbound = {
             "protocol": "shadowsocks",
             "settings": {
-                "servers": [
-                    {
-                        "address": config['host'],
-                        "port": config['port'],
-                        "method": config['method'],
-                        "password": config['password']
-                    }
-                ]
+                "servers": [{
+                    "address": config['host'],
+                    "port": config['port'],
+                    "method": config['method'],
+                    "password": config['password']
+                }]
             },
-            "streamSettings": {
-                "network": "tcp",
-                "security": "none"
-            }
+            "streamSettings": {"network": "tcp", "security": "none"}
         }
     elif protocol == 'trojan':
         outbound = {
             "protocol": "trojan",
             "settings": {
-                "servers": [
-                    {
-                        "address": config['host'],
-                        "port": config['port'],
-                        "password": config['password']
-                    }
-                ]
+                "servers": [{
+                    "address": config['host'],
+                    "port": config['port'],
+                    "password": config['password']
+                }]
             },
             "streamSettings": {
                 "network": config.get('network', 'tcp'),
@@ -465,18 +422,15 @@ def create_xray_config(config):
             }
     else:
         return None
-
     base_config["outbounds"].append(outbound)
     return base_config
 
-# ---------- Проверки ----------
+# ---------- TCP ПРОВЕРКА ----------
 def check_tcp(link):
-    """Быстрая TCP-проверка доступности хоста и порта."""
     parsed = parse_link(link)
     if not parsed:
         return (link, False)
-    host = parsed['host']
-    port = parsed['port']
+    host, port = parsed['host'], parsed['port']
     try:
         ip = resolve_host(host)
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -484,63 +438,46 @@ def check_tcp(link):
         result = sock.connect_ex((ip, port))
         sock.close()
         return (link, result == 0)
-    except Exception as e:
-        logging.debug(f"TCP ошибка для {link[:60]}: {e}")
+    except:
         return (link, False)
 
+# ---------- РЕАЛЬНАЯ ПРОВЕРКА ----------
 def check_real(link):
-    """Реальная проверка через Xray-core (создание временного конфига и тестовый запрос)."""
     config_dict = parse_link(link)
     if not config_dict:
         return (link, False, None)
-
     xray_config = create_xray_config(config_dict)
     if not xray_config:
         return (link, False, None)
-
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
         config_path = f.name
         json.dump(xray_config, f, indent=2)
-
     process = None
     try:
         process = subprocess.Popen(
             [XRAY_CORE_PATH, 'run', '-config', config_path],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
         )
-
         time.sleep(XRAY_STARTUP_DELAY)
-
         proxies = {
             'http': f'socks5h://127.0.0.1:{SOCKS_PORT}',
             'https': f'socks5h://127.0.0.1:{SOCKS_PORT}'
         }
-
         for test_url in TEST_URLS:
             try:
-                start_time = time.time()
-                response = requests.get(
-                    test_url,
-                    proxies=proxies,
-                    timeout=REAL_CHECK_TIMEOUT,
-                    headers={'User-Agent': USER_AGENT},
-                    allow_redirects=False
+                start = time.time()
+                resp = requests.get(
+                    test_url, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
+                    headers={'User-Agent': USER_AGENT}, allow_redirects=False
                 )
-                latency = int((time.time() - start_time) * 1000)
-
-                if response.status_code == 204:
+                latency = int((time.time() - start) * 1000)
+                if resp.status_code == 204:
                     return (link, True, latency)
-                else:
-                    logging.debug(f"URL {test_url} вернул {response.status_code}")
-            except requests.exceptions.RequestException as e:
-                logging.debug(f"Попытка для {test_url} не удалась: {e}")
-
+            except:
+                continue
         return (link, False, None)
-
     except Exception as e:
-        logging.debug(f"Ошибка при проверке {link[:60]}...: {e}")
+        logging.debug(f"Ошибка при проверке {link[:60]}: {e}")
         return (link, False, None)
     finally:
         if process:
@@ -552,24 +489,30 @@ def check_real(link):
         if os.path.exists(config_path):
             os.unlink(config_path)
 
+# ---------- ДВУХУРОВНЕВАЯ ФИЛЬТРАЦИЯ (КОМПАКТНЫЙ ЛОГ) ----------
 def filter_working_links(links):
-    total = len(links)
-    logging.info(f"🚀 Начинаю фильтрацию {total} ссылок")
+    global record_counter, current_check, total_checks
+    total_checks = len(links)
+    logging.info(f"🚀 Начинаю фильтрацию {total_checks} ссылок")
 
-    # Этап 1: TCP-проверка
-    logging.info(f"🌐 Этап 1: TCP-проверка {total} ссылок (параллельность {TCP_MAX_WORKERS}, таймаут {TCP_CHECK_TIMEOUT}с)...")
+    # ---------- Этап 1: TCP ----------
+    logging.info(f"🌐 Этап 1: TCP-проверка {total_checks} ссылок...")
     tcp_ok = []
     with ThreadPoolExecutor(max_workers=TCP_MAX_WORKERS) as executor:
         future_to_link = {executor.submit(check_tcp, link): link for link in links}
-        for i, future in enumerate(as_completed(future_to_link), 1):
+        for future in as_completed(future_to_link):
+            current_check += 1
+            record_counter += 1
             link, ok = future.result()
+            short = shorten_link(link)
             if ok:
                 tcp_ok.append(link)
-                logging.info(f"✅ TCP OK [{i}/{total}]: {link[:80]}...")
+                status = "TCP ✅"
             else:
-                logging.info(f"❌ TCP Failed [{i}/{total}]: {link[:80]}...")
+                status = "TCP ❌"
+            logging.info(f"{record_counter} {status} [{current_check}/{total_checks}]: {short}")
 
-    logging.info(f"📊 TCP-проверка завершена. Прошли: {len(tcp_ok)}/{total}")
+    logging.info(f"📊 TCP-проверка завершена. Прошли: {len(tcp_ok)}/{total_checks}")
 
     if ONLY_TCP:
         return tcp_ok
@@ -577,85 +520,86 @@ def filter_working_links(links):
     if not tcp_ok:
         return []
 
-    # Этап 2: реальная проверка
-    logging.info(f"🧪 Этап 2: Реальная проверка {len(tcp_ok)} ссылок через Xray-core (порт {SOCKS_PORT}, параллельность {REAL_CHECK_CONCURRENCY})...")
-    working_real = []
+    # ---------- Этап 2: реальная проверка ----------
+    logging.info(f"🧪 Этап 2: Реальная проверка {len(tcp_ok)} ссылок...")
+    working_links = []
     too_slow = 0
+    stage_total = len(tcp_ok)
+    stage_current = 0
     with ThreadPoolExecutor(max_workers=REAL_CHECK_CONCURRENCY) as executor:
         future_to_link = {executor.submit(check_real, link): link for link in tcp_ok}
-        for i, future in enumerate(as_completed(future_to_link), 1):
+        for future in as_completed(future_to_link):
+            stage_current += 1
+            current_check += 1
+            record_counter += 1
             link, is_working, latency = future.result()
+            short = shorten_link(link)
+
+            # Определяем протокол
+            if link.startswith('vless://'):
+                proto = 'vless'
+            elif link.startswith('ss://'):
+                proto = 'ss'
+            elif link.startswith('trojan://'):
+                proto = 'trojan'
+            else:
+                proto = '?'
+
             if is_working:
                 if MAX_LATENCY_MS > 0 and latency > MAX_LATENCY_MS:
+                    emoji = "⚠️"
+                    extra = f"({latency}ms > {MAX_LATENCY_MS}ms)"
                     too_slow += 1
-                    logging.info(f"⚠️ [{i}/{len(tcp_ok)}] Слишком медленный (latency: {latency}ms > {MAX_LATENCY_MS}ms): {link[:80]}...")
                 else:
-                    working_real.append(link)
-                    logging.info(f"✅ [{i}/{len(tcp_ok)}] Работает (latency: {latency}ms): {link[:80]}...")
+                    emoji = "✅"
+                    extra = f"({latency}ms)"
+                    working_links.append(link)
+                log_msg = f"{record_counter} {proto} {emoji} [{stage_current}/{stage_total}] {extra}: {short}"
             else:
-                logging.info(f"❌ [{i}/{len(tcp_ok)}] Не работает: {link[:80]}...")
+                log_msg = f"{record_counter} {proto} ❌ [{stage_current}/{stage_total}]: {short}"
+
+            logging.info(log_msg)
 
     if MAX_LATENCY_MS > 0 and too_slow > 0:
         logging.info(f"⚠️ Отсеяно по скорости: {too_slow} серверов с latency > {MAX_LATENCY_MS}ms")
 
-    return working_real
+    return working_links
 
+# ---------- СОХРАНЕНИЕ РЕЗУЛЬТАТОВ (БЕЗ ИЗМЕНЕНИЙ) ----------
 def save_working_links(links):
-    """
-    Сохраняет рабочие ссылки в subscription.txt с красивыми заголовками.
-    Каждая ссылка получает тег с номером, флагом страны, явным SNI (если есть).
-    Дата убрана из названия сервера, оставлена только в аннонсе.
-    """
     logging.info(f"💾 Сохраняю {len(links)} рабочих ссылок в {OUTPUT_FILE}")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
-        # Заголовки подписки
         f.write(f"#profile-title:{PROFILE_TITLE}\n")
         f.write(f"#subscription-userinfo:{SUBSCRIPTION_USERINFO}\n")
         f.write(f"#profile-update-interval:{PROFILE_UPDATE_INTERVAL}\n")
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
-        # Аннонс с эмодзи (дата здесь остаётся)
         f.write(f"#announce: АКТИВНЫХ СЕРВЕРОВ 🚀 {len(links)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
-
-        # Сами ссылки с нумерацией и флагами
         for idx, link in enumerate(links, start=1):
-            # Удаляем старые теги, если они были
             link = re.sub(r'#.*$', '', link)
             server_num = f"{idx:04d}"
-
-            # Парсим ссылку для получения информации
             config = parse_link(link)
             flag = ""
             sni_part = None
-
             if config:
-                # Получаем флаг страны по IP хоста
                 try:
                     ip = resolve_host(config['host'])
                     flag = get_country_flag(ip)
                 except Exception:
                     pass
-
-                # Явно указанный SNI
                 explicit_sni = config.get('explicit_sni')
                 if explicit_sni:
                     sni_part = f"SNI- {explicit_sni}"
-
-            # Формируем тег — убрана дата, префикс изменён на 🔑📡
             tag_parts = [f"#🔑📡 {server_num}"]
             if flag:
                 tag_parts.append(flag)
             if sni_part:
                 tag_parts.append(sni_part)
-            # Дата больше не добавляется
             tag = " | ".join(tag_parts)
-
             f.write(link + tag + '\n')
-
-    logging.info(f"💾 Сохранено {len(links)} рабочих ссылок в {OUTPUT_FILE} с заголовками и нумерацией.")
+    logging.info(f"💾 Сохранено {len(links)} рабочих ссылок в {OUTPUT_FILE}")
 
 def create_base64_subscription():
-    """Создаёт Base64-версию подписки."""
     try:
         with open(OUTPUT_FILE, 'rb') as f:
             content = f.read()
@@ -684,6 +628,7 @@ def check_xray_available():
         return False
 
 def main():
+    global record_counter, current_check, total_checks
     logging.info("🟢 Запуск генератора подписок")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
@@ -696,6 +641,11 @@ def main():
     all_links = gather_all_links(sources)
     if not all_links:
         return
+
+    # Сброс счётчиков
+    record_counter = 0
+    current_check = 0
+    total_checks = len(all_links)
 
     working_links = filter_working_links(all_links)
     save_working_links(working_links)

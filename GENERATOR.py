@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# GENERATOR.py – Максимально быстрая проверка Vless серверов + флаги стран (эмодзи)
+# GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран (эмодзи)
 
 import re
 import socket
@@ -136,8 +136,9 @@ def fetch_content(url):
         logging.warning(f"⚠️ Не удалось загрузить {url}: {e}")
         return None
 
-def extract_vless_links_from_text(text):
-    return re.findall(r'vless://[^\s<>"\']+', text)
+def extract_links_from_text(text):
+    """Извлекает ссылки Vless, Shadowsocks и Trojan."""
+    return re.findall(r'(?:vless|ss|trojan)://[^\s<>"\']+', text)
 
 def decode_base64_content(encoded):
     try:
@@ -150,7 +151,7 @@ def decode_base64_content(encoded):
 def gather_all_links(sources):
     all_links = set()
     for src in sources:
-        if src.startswith('vless://'):
+        if src.startswith(('vless://', 'ss://', 'trojan://')):
             all_links.add(src)
             continue
 
@@ -159,18 +160,19 @@ def gather_all_links(sources):
             continue
 
         decoded = decode_base64_content(content)
-        links = extract_vless_links_from_text(content)
+        links = extract_links_from_text(content)
         if decoded != content:
-            links.extend(extract_vless_links_from_text(decoded))
+            links.extend(extract_links_from_text(decoded))
 
         for link in links:
             all_links.add(link)
 
         logging.info(f"🔗 Из {src} получено {len(links)} ссылок")
 
-    logging.info(f"🎯 Всего собрано уникальных Vless-ссылок: {len(all_links)}")
+    logging.info(f"🎯 Всего собрано уникальных ссылок: {len(all_links)}")
     return list(all_links)
 
+# ---------- Парсеры для разных протоколов ----------
 def parse_vless_link(link):
     try:
         without_proto = link[8:]
@@ -191,6 +193,7 @@ def parse_vless_link(link):
             security = 'tls'
 
         config = {
+            'protocol': 'vless',
             'uuid': uuid,
             'host': host,
             'port': port,
@@ -208,11 +211,115 @@ def parse_vless_link(link):
         }
         return config
     except Exception as e:
-        logging.debug(f"Ошибка парсинга ссылки {link[:50]}...: {e}")
+        logging.debug(f"Ошибка парсинга Vless-ссылки {link[:50]}...: {e}")
         return None
 
-def create_xray_config(vless_config):
-    config = {
+def parse_ss_link(link):
+    """Парсит ссылку Shadowsocks (ss://)."""
+    try:
+        # удаляем 'ss://'
+        rest = link[5:]
+        # отделяем параметры по '?' и '#'
+        if '#' in rest:
+            rest, _ = rest.split('#', 1)
+        if '?' in rest:
+            rest, _ = rest.split('?', 1)
+
+        # теперь rest содержит либо base64, либо userinfo@hostport
+        if '@' in rest:
+            # формат userinfo@hostport
+            userinfo, hostport = rest.split('@', 1)
+            # userinfo: method:password
+            if ':' in userinfo:
+                method, password = userinfo.split(':', 1)
+            else:
+                return None
+        else:
+            # вероятно base64
+            try:
+                decoded = base64.b64decode(rest).decode('utf-8')
+                if '@' in decoded:
+                    userinfo, hostport = decoded.split('@', 1)
+                    if ':' in userinfo:
+                        method, password = userinfo.split(':', 1)
+                    else:
+                        return None
+                else:
+                    return None
+            except:
+                return None
+
+        # hostport вида host:port
+        if ':' in hostport:
+            host, port_str = hostport.rsplit(':', 1)
+            try:
+                port = int(port_str)
+            except:
+                return None
+        else:
+            port = 443  # на всякий случай, хотя обычно порт указывается
+
+        return {
+            'protocol': 'ss',
+            'host': host,
+            'port': port,
+            'method': method,
+            'password': password,
+            'original': link
+        }
+    except Exception as e:
+        logging.debug(f"Ошибка парсинга SS-ссылки {link[:50]}...: {e}")
+        return None
+
+def parse_trojan_link(link):
+    """Парсит ссылку Trojan (trojan://)."""
+    try:
+        parsed = urlparse(link)
+        if parsed.scheme != 'trojan':
+            return None
+        userinfo = parsed.username
+        if not userinfo:
+            return None
+        password = userinfo
+        host = parsed.hostname
+        port = parsed.port or 443
+        params = parse_qs(parsed.query)
+
+        sni = params.get('peer', [None])[0] or params.get('sni', [host])[0]
+        allow_insecure = params.get('allowInsecure', ['0'])[0].lower() in ('1', 'true', 'yes')
+        network = params.get('type', ['tcp'])[0]
+        security = params.get('security', ['tls'])[0]
+
+        return {
+            'protocol': 'trojan',
+            'host': host,
+            'port': port,
+            'password': password,
+            'sni': sni,
+            'allow_insecure': allow_insecure,
+            'network': network,
+            'security': security,
+            'original': link
+        }
+    except Exception as e:
+        logging.debug(f"Ошибка парсинга Trojan-ссылки {link[:50]}...: {e}")
+        return None
+
+def parse_link(link):
+    """Универсальный парсер: определяет протокол и вызывает соответствующий парсер."""
+    if link.startswith('vless://'):
+        return parse_vless_link(link)
+    elif link.startswith('ss://'):
+        return parse_ss_link(link)
+    elif link.startswith('trojan://'):
+        return parse_trojan_link(link)
+    else:
+        return None
+
+# ---------- Создание конфигурации Xray ----------
+def create_xray_config(config):
+    """Создаёт конфигурацию Xray на основе распарсенных параметров."""
+    base_config = {
         "log": {"loglevel": "error"},
         "inbounds": [
             {
@@ -226,61 +333,102 @@ def create_xray_config(vless_config):
                 }
             }
         ],
-        "outbounds": [
-            {
-                "protocol": "vless",
-                "settings": {
-                    "vnext": [
-                        {
-                            "address": vless_config['host'],
-                            "port": vless_config['port'],
-                            "users": [
-                                {
-                                    "id": vless_config['uuid'],
-                                    "encryption": vless_config['encryption'],
-                                    "flow": vless_config['flow']
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "streamSettings": {
-                    "network": vless_config['type'],
-                    "security": vless_config['security']
-                }
-            }
-        ]
+        "outbounds": []
     }
 
-    stream = config["outbounds"][0]["streamSettings"]
-
-    if vless_config['security'] == 'tls':
-        stream["tlsSettings"] = {
-            "serverName": vless_config['sni'],
-            "fingerprint": vless_config['fp'],
-            "allowInsecure": False
-        }
-    elif vless_config['security'] == 'reality':
-        stream["realitySettings"] = {
-            "serverName": vless_config['sni'],
-            "fingerprint": vless_config['fp'],
-            "publicKey": vless_config['pbk'],
-            "shortId": vless_config['sid'],
-            "spiderX": vless_config['spx']
-        }
-
-    if vless_config['type'] == 'ws':
-        stream["wsSettings"] = {
-            "path": vless_config['path'],
-            "headers": {
-                "Host": vless_config['host_header']
+    protocol = config['protocol']
+    if protocol == 'vless':
+        outbound = {
+            "protocol": "vless",
+            "settings": {
+                "vnext": [
+                    {
+                        "address": config['host'],
+                        "port": config['port'],
+                        "users": [
+                            {
+                                "id": config['uuid'],
+                                "encryption": config.get('encryption', 'none'),
+                                "flow": config.get('flow', '')
+                            }
+                        ]
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": config.get('type', 'tcp'),
+                "security": config.get('security', 'none')
             }
         }
+        if config['security'] == 'tls':
+            outbound["streamSettings"]["tlsSettings"] = {
+                "serverName": config.get('sni', config['host']),
+                "fingerprint": config.get('fp', 'chrome'),
+                "allowInsecure": False
+            }
+        elif config['security'] == 'reality':
+            outbound["streamSettings"]["realitySettings"] = {
+                "serverName": config.get('sni', config['host']),
+                "fingerprint": config.get('fp', 'chrome'),
+                "publicKey": config.get('pbk', ''),
+                "shortId": config.get('sid', ''),
+                "spiderX": config.get('spx', '/')
+            }
+        if config.get('type') == 'ws':
+            outbound["streamSettings"]["wsSettings"] = {
+                "path": config.get('path', '/'),
+                "headers": {"Host": config.get('host_header', config['host'])}
+            }
+    elif protocol == 'ss':
+        outbound = {
+            "protocol": "shadowsocks",
+            "settings": {
+                "servers": [
+                    {
+                        "address": config['host'],
+                        "port": config['port'],
+                        "method": config['method'],
+                        "password": config['password']
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": "tcp",
+                "security": "none"
+            }
+        }
+    elif protocol == 'trojan':
+        outbound = {
+            "protocol": "trojan",
+            "settings": {
+                "servers": [
+                    {
+                        "address": config['host'],
+                        "port": config['port'],
+                        "password": config['password']
+                    }
+                ]
+            },
+            "streamSettings": {
+                "network": config.get('network', 'tcp'),
+                "security": config.get('security', 'tls')
+            }
+        }
+        if config.get('security') == 'tls':
+            outbound["streamSettings"]["tlsSettings"] = {
+                "serverName": config.get('sni', config['host']),
+                "allowInsecure": config.get('allow_insecure', False)
+            }
+    else:
+        return None
 
-    return config
+    base_config["outbounds"].append(outbound)
+    return base_config
 
+# ---------- Проверки ----------
 def check_tcp(link):
-    parsed = parse_vless_link(link)
+    """Быстрая TCP-проверка доступности хоста и порта."""
+    parsed = parse_link(link)
     if not parsed:
         return (link, False)
     host = parsed['host']
@@ -296,14 +444,19 @@ def check_tcp(link):
         logging.debug(f"TCP ошибка для {link[:60]}: {e}")
         return (link, False)
 
-def check_vless_real(link):
-    vless_config = parse_vless_link(link)
-    if not vless_config:
+def check_real(link):
+    """Реальная проверка через Xray-core (создание временного конфига и тестовый запрос)."""
+    config_dict = parse_link(link)
+    if not config_dict:
+        return (link, False, None)
+
+    xray_config = create_xray_config(config_dict)
+    if not xray_config:
         return (link, False, None)
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
         config_path = f.name
-        json.dump(create_xray_config(vless_config), f, indent=2)
+        json.dump(xray_config, f, indent=2)
 
     process = None
     try:
@@ -384,7 +537,7 @@ def filter_working_links(links):
     working_real = []
     too_slow = 0
     with ThreadPoolExecutor(max_workers=REAL_CHECK_CONCURRENCY) as executor:
-        future_to_link = {executor.submit(check_vless_real, link): link for link in tcp_ok}
+        future_to_link = {executor.submit(check_real, link): link for link in tcp_ok}
         for i, future in enumerate(as_completed(future_to_link), 1):
             link, is_working, latency = future.result()
             if is_working:
@@ -420,13 +573,13 @@ def save_working_links(links):
 
         # Сами ссылки с нумерацией и флагами
         for idx, link in enumerate(links, start=1):
-            # Удаляем старые теги
+            # Удаляем старые теги, если они были
             link = re.sub(r'#.*$', '', link)
             server_num = f"{idx:04d}"
 
             # Определяем флаг страны
             flag = ""
-            config = parse_vless_link(link)
+            config = parse_link(link)
             if config:
                 try:
                     ip = resolve_host(config['host'])

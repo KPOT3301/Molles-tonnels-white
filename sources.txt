@@ -5,15 +5,11 @@ https://gitverse.ru/api/repos/LowiK/LowiKLive/raw/branch/main/ObhodBSfree.txt
 #📄 Обход белых списков от WL RUS
 https://wlrus.lol/confs/selected.txt
 https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
-#при белой пизде Vless-Reality-White-Lists-Rus-Mobile
-https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
 #от zieng2
 https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt
 #KfWL
 https://raw.githubusercontent.com/prominbro/KfWL/refs/heads/main/KfWL.txt
 https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
-#vpn-configs-for-russia
-https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt
 #LIBERTY
 https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/white-list_available
 #РОСТУНЕЛЬ
@@ -25,6 +21,7 @@ https://subrostunnel.vercel.app/wl.txt
 #🏳️ БЕЛЫЕ СПИСКИ 🏳️ WHITE LISTS | CIDR | Mobile-150-(1-2)
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt
+https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt
 #это не я
 https://alley.serv00.net/whitelist
 #доступ к интернету
@@ -40,7 +37,10 @@ https://gist.githubusercontent.com/sevushyamamoto-stack/9341be7a058e132154d407d0
 https://sub.scrubly.site:8182/micvpn/all
 #kosmos
 https://kosmos.tunnelguard.ru/link.php?client_id=cbce1c81-27b4-4579-89ec-bf4678d70b29
-#whit
-https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt
 # GBR
 https://gbr.mydan.online/configs
+# РКП
+https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/configs/url_work.txt
+# vlesstrojan
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part2.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part1.txt

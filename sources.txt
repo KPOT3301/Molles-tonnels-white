@@ -42,3 +42,5 @@ https://sub.scrubly.site:8182/micvpn/all
 https://kosmos.tunnelguard.ru/link.php?client_id=cbce1c81-27b4-4579-89ec-bf4678d70b29
 #whit
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt
+# GBR
+https://gbr.mydan.online/configs

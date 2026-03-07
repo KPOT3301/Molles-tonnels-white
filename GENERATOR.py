@@ -82,7 +82,7 @@ TEST_URLS = [
     "http://connectivitycheck.gstatic.com/generate_204"   # один быстрый URL
 ]
 
-MAX_LATENCY_MS = 2000
+MAX_LATENCY_MS = 1000
 ONLY_TCP = False
 
 # ---------- GEOIP ----------

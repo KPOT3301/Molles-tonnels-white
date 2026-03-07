@@ -4,6 +4,7 @@ https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads
 https://gitverse.ru/api/repos/LowiK/LowiKLive/raw/branch/main/ObhodBSfree.txt
 #📄 Обход белых списков от WL RUS
 https://wlrus.lol/confs/selected.txt
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
 #при белой пизде Vless-Reality-White-Lists-Rus-Mobile
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
 #от zieng2

@@ -54,3 +54,6 @@ https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/w
 
 # CID VPN
 https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelist.txt
+
+# ALL vpn
+http://allvpn.x10.mx/sub.php

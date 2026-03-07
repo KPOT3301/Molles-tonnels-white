@@ -13,3 +13,10 @@ https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
 # global
 https://gist.githubusercontent.com/sevushyamamoto-stack/9341be7a058e132154d407d082a60fb1/raw/mysub.txt
 
+
+# это не я
+https://alley.serv00.net/whitelist
+https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/whitelist
+
+# 📄 Обход белых списков от WL RUS
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt

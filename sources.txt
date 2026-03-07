@@ -1,7 +1,4 @@
 
-# 📄 Обход белых списков от WL RUS
-https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
-
 # zieng2
 https://raw.githubusercontent.com/zieng2/wl/main/vless_lite.txt
 
@@ -15,10 +12,6 @@ https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/w
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile.txt
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/Vless-Reality-White-Lists-Rus-Mobile-2.txt
 https://raw.githubusercontent.com/igareck/vpn-configs-for-russia/refs/heads/main/WHITE-CIDR-RU-checked.txt
-
-# это не я
-https://alley.serv00.net/whitelist
-https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/whitelist
 
 # доступ к интернету
 https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_part1.txt

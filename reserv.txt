@@ -1,1 +1,15 @@
+# 🟢 WHITELIST
+https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/whitelist.txt
+
+# LowiK
+https://raw.githubusercontent.com/LowiKLive/BypassWhitelistRu/refs/heads/main/WhiteList-Bypass_Ru.txt
+
+# KfWL2
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
+
+# GoodbyeWL
+https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
+
+# global
+https://gist.githubusercontent.com/sevushyamamoto-stack/9341be7a058e132154d407d082a60fb1/raw/mysub.txt
 

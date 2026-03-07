@@ -57,3 +57,6 @@ https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelis
 
 # ALL vpn
 http://allvpn.x10.mx/sub.php
+
+# reality 
+https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist

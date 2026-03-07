@@ -20,3 +20,7 @@ https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/h
 
 # 📄 Обход белых списков от WL RUS
 https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
+
+# LIBERTY
+https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/white-list_available
+

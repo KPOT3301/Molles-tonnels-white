@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # GENERATOR.py – Проверка Vless/SS/Trojan/VMess/Hysteria2 серверов + флаги стран
-# Добавлены протоколы VMess и Hysteria2
+# Добавлены протоколы VMess и Hysteria2, отсев по latency (> MAX_LATENCY_MS) сразу после HTTP
 # Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты TCP=10с, Xray=15с, повторы=2
 # Дополнительные проверки: HTTPS для TLS-ключей, скорость (512 КБ, мин. 500 KB/s)
 # Лог упрощён: протокол, статус, прогресс, сокращённая ссылка
@@ -632,7 +632,7 @@ def check_real(link):
                 if security in ('tls', 'reality'):
                     needs_https = True
 
-        # HTTP-проверка (как и раньше, с повторными попытками)
+        # HTTP-проверка (с повторными попытками)
         http_success = False
         http_latency = None
         for attempt in range(RETRY_COUNT + 1):
@@ -655,6 +655,10 @@ def check_real(link):
 
         if not http_success:
             return (link, False, None)
+
+        # НОВОЕ: сразу проверяем latency
+        if http_latency > MAX_LATENCY_MS:
+            return (link, False, http_latency)  # не проходим по задержке, остальные проверки не делаем
 
         # Дополнительная проверка HTTPS (если нужна)
         if needs_https:
@@ -776,17 +780,18 @@ def filter_working_links(links):
             else:
                 proto = '?'
 
-            # Находим соответствующий флаг (не используется в логе, но нужно для возврата)
+            # Находим соответствующий флаг (нужен для возврата)
             flag_dict = dict(links_with_flags)
             flag = flag_dict[link]
 
-            # Упрощённый лог
+            # Формируем лог
             if is_working:
                 working_links_with_flags.append((link, flag))
-                log_msg = f"{proto} ✅ [{stage_current}/{stage_total}]: {short}"
+                emoji = "✅"
             else:
-                log_msg = f"{proto} ❌ [{stage_current}/{stage_total}]: {short}"
+                emoji = "❌"
 
+            log_msg = f"{proto} {emoji} [{stage_current}/{stage_total}]: {short}"
             logging.info(log_msg)
 
     logging.info(f"📊 Реальная проверка завершена. Рабочих с флагами: {len(working_links_with_flags)}/{stage_total}")
@@ -850,7 +855,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s, отсев по latency > {}ms сразу после HTTP)".format(MAX_LATENCY_MS))
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

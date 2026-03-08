@@ -596,7 +596,8 @@ def save_working_links(links_with_flags):
         f.write(f"#profile-update-interval:{PROFILE_UPDATE_INTERVAL}\n")
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
-        f.write(f"#announce: АКТИВНЫХ СЕРВЕРОВ 🚀 {len(links_with_flags)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
+        # ИСПРАВЛЕНО: "АКТИВНЫХ СЕРВЕРОВ" -> "АКТИВНЫХ ТОННЕЛЕЙ"
+        f.write(f"#announce: АКТИВНЫХ ТОННЕЛЕЙ 🚀 {len(links_with_flags)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
         for idx, (link, flag) in enumerate(links_with_flags, start=1):
             link_clean = re.sub(r'#.*$', '', link)
             server_num = f"{idx:04d}"

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-# GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран
-# Оптимизация: флаг определяется сразу после TCP, реальная проверка только для серверов с флагом
-# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты увеличены до 10с, один тестовый URL
+# GENERATOR.py – Проверка Vless/SS/Trojan/VMess/Hysteria2 серверов + флаги стран
+# Добавлены протоколы VMess и Hysteria2
+# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты TCP=10с, Xray=15с, повторы=2
 # Дополнительные проверки: HTTPS для TLS-ключей, скорость (512 КБ, мин. 500 KB/s)
+# Лог упрощён: протокол, статус, прогресс, сокращённая ссылка
 
 import re
 import socket
@@ -68,11 +69,11 @@ REQUEST_TIMEOUT = 10
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
-# TCP-проверка (увеличен таймаут для более мягкого отбора)
+# TCP-проверка (таймаут 10 с)
 TCP_CHECK_TIMEOUT = 10
 TCP_MAX_WORKERS = 400
 
-# Реальная проверка (увеличен таймаут для более мягкого отбора)
+# Реальная проверка
 SOCKS_PORT = 8080
 REAL_CHECK_TIMEOUT = 15
 REAL_CHECK_CONCURRENCY = 30
@@ -163,7 +164,7 @@ def fetch_content(url):
         return None
 
 def extract_links_from_text(text):
-    return re.findall(r'(?:vless|ss|trojan)://[^\s<>"\']+', text)
+    return re.findall(r'(?:vless|ss|trojan|vmess|hysteria2|hy2)://[^\s<>"\']+', text)
 
 def decode_base64_content(encoded):
     try:
@@ -178,7 +179,7 @@ def gather_all_links(sources):
     all_links = set()
     for idx, src in enumerate(sources, 1):
         logging.info(f"📦 Обработка источника [{idx}/{len(sources)}]: {src[:60]}...")
-        if src.startswith(('vless://', 'ss://', 'trojan://')):
+        if src.startswith(('vless://', 'ss://', 'trojan://', 'vmess://', 'hysteria2://', 'hy2://')):
             all_links.add(src)
             continue
 
@@ -320,6 +321,94 @@ def parse_trojan_link(link):
         logging.debug(f"Ошибка парсинга Trojan: {e}")
         return None
 
+def parse_vmess_link(link):
+    try:
+        # Формат: vmess://base64-encoded-json
+        b64_part = link[8:]  # после vmess://
+        # Удаляем возможные фрагменты #
+        if '#' in b64_part:
+            b64_part = b64_part.split('#')[0]
+        decoded = base64.b64decode(b64_part).decode('utf-8')
+        cfg = json.loads(decoded)
+        # Обязательные поля
+        host = cfg.get('add')
+        if not host:
+            return None
+        port = int(cfg.get('port', 443))
+        uuid = cfg.get('id')
+        if not uuid:
+            return None
+        security = cfg.get('scy', 'auto')
+        network = cfg.get('net', 'tcp')
+        path = cfg.get('path', '/')
+        host_header = cfg.get('host', host)
+        tls = cfg.get('tls') == 'tls'
+        sni = cfg.get('peer') or host_header or host
+        return {
+            'protocol': 'vmess',
+            'host': host,
+            'port': port,
+            'uuid': uuid,
+            'security': security,
+            'type': network,
+            'path': path,
+            'host_header': host_header,
+            'tls': tls,
+            'sni': sni,
+            'explicit_sni': cfg.get('peer'),
+            'allow_insecure': cfg.get('allowInsecure', False)
+        }
+    except Exception as e:
+        logging.debug(f"Ошибка парсинга VMess: {e}")
+        return None
+
+def parse_hysteria2_link(link):
+    try:
+        # Поддерживаем hysteria2:// и hy2://
+        if link.startswith('hysteria2://'):
+            rest = link[12:]
+        elif link.startswith('hy2://'):
+            rest = link[6:]
+        else:
+            return None
+
+        # Разбираем userinfo@host:port?params
+        userinfo = None
+        hostport = rest
+        if '@' in rest:
+            userinfo, hostport = rest.split('@', 1)
+
+        password = None
+        if userinfo:
+            password = userinfo
+
+        parsed = urlparse(f"//{hostport}")
+        host = parsed.hostname
+        port = parsed.port or 443
+        params = parse_qs(parsed.query)
+
+        insecure = params.get('insecure', ['0'])[0].lower() in ('1', 'true', 'yes')
+        sni = params.get('sni', [host])[0]
+        up = params.get('up', [''])[0]
+        down = params.get('down', [''])[0]
+        obfs = params.get('obfs', [''])[0]
+
+        return {
+            'protocol': 'hysteria2',
+            'host': host,
+            'port': port,
+            'password': password,
+            'sni': sni,
+            'explicit_sni': sni if sni != host else None,
+            'allow_insecure': insecure,
+            'up': up,
+            'down': down,
+            'obfs': obfs
+        }
+    except Exception as e:
+        logging.debug(f"Ошибка парсинга Hysteria2: {e}")
+        return None
+
 def parse_link(link):
     if link.startswith('vless://'):
         return parse_vless_link(link)
@@ -327,6 +416,10 @@ def parse_link(link):
         return parse_ss_link(link)
     elif link.startswith('trojan://'):
         return parse_trojan_link(link)
+    elif link.startswith('vmess://'):
+        return parse_vmess_link(link)
+    elif link.startswith(('hysteria2://', 'hy2://')):
+        return parse_hysteria2_link(link)
     else:
         return None
 
@@ -353,6 +446,7 @@ def create_xray_config(config):
         "outbounds": []
     }
     protocol = config['protocol']
+
     if protocol == 'vless':
         outbound = {
             "protocol": "vless",
@@ -391,6 +485,36 @@ def create_xray_config(config):
                 "path": config.get('path', '/'),
                 "headers": {"Host": config.get('host_header', config['host'])}
             }
+
+    elif protocol == 'vmess':
+        outbound = {
+            "protocol": "vmess",
+            "settings": {
+                "vnext": [{
+                    "address": config['host'],
+                    "port": config['port'],
+                    "users": [{
+                        "id": config['uuid'],
+                        "security": config.get('security', 'auto')
+                    }]
+                }]
+            },
+            "streamSettings": {
+                "network": config.get('type', 'tcp'),
+                "security": config.get('tls', False) and "tls" or "none"
+            }
+        }
+        if config.get('tls'):
+            outbound["streamSettings"]["tlsSettings"] = {
+                "serverName": config.get('sni', config['host']),
+                "allowInsecure": config.get('allow_insecure', False)
+            }
+        if config.get('type') == 'ws':
+            outbound["streamSettings"]["wsSettings"] = {
+                "path": config.get('path', '/'),
+                "headers": {"Host": config.get('host_header', config['host'])}
+            }
+
     elif protocol == 'ss':
         outbound = {
             "protocol": "shadowsocks",
@@ -404,6 +528,7 @@ def create_xray_config(config):
             },
             "streamSettings": {"network": "tcp", "security": "none"}
         }
+
     elif protocol == 'trojan':
         outbound = {
             "protocol": "trojan",
@@ -424,8 +549,32 @@ def create_xray_config(config):
                 "serverName": config.get('sni', config['host']),
                 "allowInsecure": config.get('allow_insecure', False)
             }
+
+    elif protocol == 'hysteria2':
+        outbound = {
+            "protocol": "hysteria2",
+            "settings": {
+                "server": config['host'],
+                "port": config['port'],
+                "password": config['password'],
+                "tls": {
+                    "sni": config.get('sni', config['host']),
+                    "insecure": config.get('allow_insecure', False)
+                }
+            }
+        }
+        if config.get('up') or config.get('down'):
+            outbound["settings"]["bandwidth"] = {}
+            if config.get('up'):
+                outbound["settings"]["bandwidth"]["up"] = config['up']
+            if config.get('down'):
+                outbound["settings"]["bandwidth"]["down"] = config['down']
+        if config.get('obfs'):
+            outbound["settings"]["obfs"] = config['obfs']
+
     else:
         return None
+
     base_config["outbounds"].append(outbound)
     return base_config
 
@@ -472,10 +621,16 @@ def check_real(link):
 
         # Определяем, нужно ли проверять HTTPS (для TLS-ключей)
         needs_https = False
-        if config_dict['protocol'] in ('vless', 'trojan'):
-            security = config_dict.get('security', 'none')
-            if security in ('tls', 'reality'):
-                needs_https = True
+        if config_dict['protocol'] in ('vless', 'vmess', 'trojan', 'hysteria2'):
+            # Для VMess проверяем поле tls
+            if config_dict['protocol'] == 'vmess':
+                needs_https = config_dict.get('tls', False)
+            elif config_dict['protocol'] == 'hysteria2':
+                needs_https = True  # Hysteria2 всегда использует TLS
+            else:
+                security = config_dict.get('security', 'none')
+                if security in ('tls', 'reality'):
+                    needs_https = True
 
         # HTTP-проверка (как и раньше, с повторными попытками)
         http_success = False
@@ -507,7 +662,6 @@ def check_real(link):
             for attempt in range(2):  # две попытки
                 try:
                     https_test = "https://www.google.com/generate_204"
-                    # verify=False для игнорирования ошибок сертификата (чтобы не отсекать из-за локальных проблем)
                     resp = requests.get(https_test, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
                                         headers={'User-Agent': USER_AGENT}, verify=False)
                     https_ok = True
@@ -608,31 +762,30 @@ def filter_working_links(links):
             link, is_working, latency = future.result()
             short = shorten_link(link)
 
-            # Определяем протокол
+            # Определяем протокол для лога
             if link.startswith('vless://'):
                 proto = 'vless'
             elif link.startswith('ss://'):
                 proto = 'ss'
             elif link.startswith('trojan://'):
                 proto = 'trojan'
+            elif link.startswith('vmess://'):
+                proto = 'vmess'
+            elif link.startswith(('hysteria2://', 'hy2://')):
+                proto = 'hy2'
             else:
                 proto = '?'
 
-            # Находим соответствующий флаг
+            # Находим соответствующий флаг (не используется в логе, но нужно для возврата)
             flag_dict = dict(links_with_flags)
             flag = flag_dict[link]
 
+            # Упрощённый лог
             if is_working:
-                if MAX_LATENCY_MS > 0 and latency > MAX_LATENCY_MS:
-                    emoji = "⚠️"
-                    extra = f"({latency}ms > {MAX_LATENCY_MS}ms)"
-                else:
-                    emoji = "✅"
-                    extra = f"({latency}ms)"
-                    working_links_with_flags.append((link, flag))
-                log_msg = f"{record_counter} {proto} {emoji} [{stage_current}/{stage_total}] {extra}: {short}"
+                working_links_with_flags.append((link, flag))
+                log_msg = f"{proto} ✅ [{stage_current}/{stage_total}]: {short}"
             else:
-                log_msg = f"{record_counter} {proto} ❌ [{stage_current}/{stage_total}]: {short}"
+                log_msg = f"{proto} ❌ [{stage_current}/{stage_total}]: {short}"
 
             logging.info(log_msg)
 
@@ -697,7 +850,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s)")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

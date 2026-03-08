@@ -1,1 +1,52 @@
+# GBR
+https://gbr.mydan.online/configs
+
+# РКП
+https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/configs/url_work.txt
+
+# доступ к интернету +++
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_part1.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_part2.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_part3.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_part4.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part1.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part2.txt
+
+# vlesstrojan
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part2.txt
+https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part1.txt
+
+# KfWL2
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
+
+# 🟢 WHITELIST
+https://raw.githubusercontent.com/55prosek-lgtm/vpn_config_for_russia/refs/heads/main/whitelist.txt
+
+# LowiK
+https://raw.githubusercontent.com/LowiKLive/BypassWhitelistRu/refs/heads/main/WhiteList-Bypass_Ru.txt
+
+# GoodbyeWL
+https://raw.githubusercontent.com/gbwltg/gbwl/refs/heads/main/m3EsPqwmlc
+
+# global
+https://gist.githubusercontent.com/sevushyamamoto-stack/9341be7a058e132154d407d082a60fb1/raw/mysub.txt
+
+# это не я
+https://alley.serv00.net/whitelist
+https://raw.githubusercontent.com/EtoNeYaProject/etoneyaproject.github.io/refs/heads/main/whitelist
+
+# 📄 Обход белых списков от WL RUS
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
+
+# LIBERTY
+https://raw.githubusercontent.com/WhitePrime/xraycheck/refs/heads/main/configs/white-list_available
+
+# CID VPN
+https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelist.txt
+
+# ALL vpn
+http://allvpn.x10.mx/sub.php
+
+# reality 
+https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist
 

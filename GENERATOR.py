@@ -68,22 +68,26 @@ USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
 # TCP-проверка (увеличен таймаут для более мягкого отбора)
-TCP_CHECK_TIMEOUT = 10                # было 2
+TCP_CHECK_TIMEOUT = 10
 TCP_MAX_WORKERS = 400
 
 # Реальная проверка (увеличен таймаут для более мягкого отбора)
 SOCKS_PORT = 8080
-REAL_CHECK_TIMEOUT = 15               # было 8 → теперь 15
+REAL_CHECK_TIMEOUT = 15
 REAL_CHECK_CONCURRENCY = 30
 XRAY_STARTUP_DELAY = 1
-RETRY_COUNT = 2                        # было 0 → теперь 2
+RETRY_COUNT = 2
 
 TEST_URLS = [
-    "http://connectivitycheck.gstatic.com/generate_204"   # один быстрый URL
+    "http://connectivitycheck.gstatic.com/generate_204"
 ]
 
 MAX_LATENCY_MS = 500
 ONLY_TCP = False
+
+# NEW: Константы для проверки скорости
+SPEED_TEST_URL = "http://speedtest.tele2.net/1MB.zip"
+MIN_SPEED_KBPS = 100  # минимальная скорость в KB/s
 
 # ---------- GEOIP ----------
 GEOIP_DB_PATH = "GeoLite2-Country.mmdb"
@@ -376,7 +380,7 @@ def create_xray_config(config):
         elif config['security'] == 'reality':
             outbound["streamSettings"]["realitySettings"] = {
                 "serverName": config.get('sni', config['host']),
-                "fingerprint": config.get('fp', 'random'),   # изменено на 'random' для смягчения
+                "fingerprint": config.get('fp', 'random'),
                 "publicKey": config.get('pbk', ''),
                 "shortId": config.get('sid', ''),
                 "spiderX": config.get('spx', '/')
@@ -440,7 +444,7 @@ def check_tcp(link):
     except:
         return (link, False, None)
 
-# ---------- РЕАЛЬНАЯ ПРОВЕРКА (с повторными попытками и любым HTTP-статусом) ----------
+# ---------- РЕАЛЬНАЯ ПРОВЕРКА (с дополнительными тестами) ----------
 def check_real(link):
     config_dict = parse_link(link)
     if not config_dict:
@@ -465,7 +469,18 @@ def check_real(link):
             'https': f'socks5h://127.0.0.1:{SOCKS_PORT}'
         }
 
-        # Цикл повторных попыток
+        # NEW: Определяем, нужно ли проверять TLS (HTTPS)
+        needs_https = False
+        if config_dict['protocol'] in ('vless', 'trojan'):
+            security = config_dict.get('security', 'none')
+            if security in ('tls', 'reality'):
+                needs_https = True
+
+        # Переменные для сбора результатов
+        http_success = False
+        http_latency = None
+
+        # Цикл повторных попыток для HTTP
         for attempt in range(RETRY_COUNT + 1):
             for test_url in TEST_URLS:
                 try:
@@ -475,16 +490,56 @@ def check_real(link):
                         headers={'User-Agent': USER_AGENT}, allow_redirects=False
                     )
                     latency = int((time.time() - start) * 1000)
-                    # Любой ответ (даже с ошибкой) считаем успехом, т.к. соединение через прокси установлено
-                    return (link, True, latency)
+                    http_success = True
+                    http_latency = latency
+                    break  # успешный HTTP-запрос, выходим из цикла URL
                 except Exception:
-                    # Пробуем следующий URL
-                    continue
-            # Если все URL не сработали на этой попытке, делаем паузу перед следующей
+                    continue  # пробуем следующий URL
+            if http_success:
+                break  # успешная попытка, выходим из цикла attempt
             time.sleep(1)
 
-        # Если все попытки исчерпаны
-        return (link, False, None)
+        if not http_success:
+            return (link, False, None)
+
+        # --- Дополнительная проверка HTTPS (если нужна) ---
+        if needs_https:
+            https_ok = False
+            for attempt in range(2):  # две попытки
+                try:
+                    https_test = "https://www.google.com/generate_204"
+                    # verify=False для игнорирования ошибок сертификата
+                    resp = requests.get(https_test, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
+                                        headers={'User-Agent': USER_AGENT}, verify=False)
+                    https_ok = True
+                    break
+                except Exception:
+                    time.sleep(1)
+            if not https_ok:
+                return (link, False, None)
+
+        # --- Проверка скорости ---
+        try:
+            start_time = time.time()
+            # Скачиваем не более 1 МБ, таймаут 30 секунд
+            r = requests.get(SPEED_TEST_URL, proxies=proxies, stream=True, timeout=30)
+            r.raise_for_status()
+            downloaded = 0
+            for chunk in r.iter_content(chunk_size=8192):
+                downloaded += len(chunk)
+                if downloaded >= 1024 * 1024:  # 1 MB
+                    break
+            elapsed = time.time() - start_time
+            if elapsed > 0:
+                speed_kbps = (downloaded / 1024) / elapsed  # KB/s
+                if speed_kbps < MIN_SPEED_KBPS:
+                    return (link, False, None)
+        except Exception:
+            # Если скорость измерить не удалось, считаем провалом
+            return (link, False, None)
+
+        # Все проверки пройдены
+        return (link, True, http_latency)
 
     except Exception as e:
         logging.debug(f"Ошибка при проверке {link[:60]}: {e}")
@@ -596,7 +651,6 @@ def save_working_links(links_with_flags):
         f.write(f"#profile-update-interval:{PROFILE_UPDATE_INTERVAL}\n")
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
-        # ИСПРАВЛЕНО: "АКТИВНЫХ СЕРВЕРОВ" -> "АКТИВНЫХ ТОННЕЛЕЙ"
         f.write(f"#announce: АКТИВНЫХ ТОННЕЛЕЙ 🚀 {len(links_with_flags)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
         for idx, (link, flag) in enumerate(links_with_flags, start=1):
             link_clean = re.sub(r'#.*$', '', link)

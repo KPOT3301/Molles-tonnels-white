@@ -1,3 +1,6 @@
+# limevpn
+https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt?v=1
+
 # jsxta/whitelist-russia
 https://gbr.mydan.online/configs
 

@@ -84,7 +84,7 @@ TEST_URLS = [
     "http://connectivitycheck.gstatic.com/generate_204"
 ]
 
-MAX_LATENCY_MS = 1000
+MAX_LATENCY_MS = 1500
 ONLY_TCP = False
 
 # Константы для проверки скорости (512 КБ, мин. 500 KB/s)

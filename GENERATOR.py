@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# GENERATOR.py – Двухуровневая проверка Vless/SS/Trojan/VMess/Hysteria2 серверов + флаги стран и города
-# Добавлены протоколы VMess и Hysteria2, ужесточение критериев: HTTPS для TLS,
-# отсев по latency (TCP) сразу после первого этапа, упрощённый лог.
-# Оптимизация: флаг и город определяются сразу после TCP, реальная проверка только для серверов с флагом
-# Ускорение Xray: 30 потоков, задержка 1с, таймаут 15с, все проверки однократные.
+# GENERATOR.py – Проверка Vless/SS/Trojan/VMess/Hysteria2 серверов + флаги стран
+# Добавлены протоколы VMess и Hysteria2, отсев по latency (> MAX_LATENCY_MS) сразу после TCP
+# Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты TCP=10с, Xray=15с
+# Повторные проверки удалены: TCP_ATTEMPTS=1, RETRY_COUNT=0, HTTPS одна попытка
+# Контроль задержки (≤500 мс) перенесён на этап TCP
 
-import os
 import re
 import socket
 import base64
@@ -14,6 +13,7 @@ import subprocess
 import time
 import json
 import tempfile
+import os
 import sys
 from urllib.parse import urlparse, parse_qs
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -21,15 +21,14 @@ from functools import lru_cache
 from datetime import datetime
 
 # ---------- НАСТРОЙКА ЛОГИРОВАНИЯ ----------
-LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler(sys.stdout)],
     force=True
 )
 
-# ---------- СЧЁТЧИКИ ДЛЯ ЛОГОВ ----------
+# ---------- ГЛОБАЛЬНЫЕ СЧЁТЧИКИ ДЛЯ КОМПАКТНОГО ЛОГА ----------
 record_counter = 0
 current_check = 0
 total_checks = 0
@@ -42,23 +41,23 @@ try:
     logging.info(f"🕐 Используется часовой пояс: {TIMEZONE}")
 except ImportError:
     LOCAL_NOW = datetime.utcnow()
-    logging.warning("⚠️ zoneinfo не найдена, используется UTC")
+    logging.warning("⚠️ Библиотека zoneinfo не найдена, используется UTC")
 TODAY_STR = LOCAL_NOW.strftime("%d-%m-%Y")
 
 import requests
 
-# ---------- GEOIP (CITY) ----------
+# ---------- GEOIP ----------
 try:
     import geoip2.database
     GEOIP_AVAILABLE = True
 except ImportError:
     GEOIP_AVAILABLE = False
-    logging.warning("⚠️ geoip2 не установлена. Флаги стран и города не будут добавлены.")
+    logging.warning("⚠️ Библиотека 'geoip2' не установлена. Флаги стран не будут добавлены.")
 
 # ---------- КОНСТАНТЫ ПОДПИСКИ ----------
-PROFILE_TITLE = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-SUPPORT_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-PROFILE_WEB_PAGE_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
+SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
+PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 
@@ -70,41 +69,48 @@ REQUEST_TIMEOUT = 10
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
-# TCP-проверка
+# TCP-проверка (таймаут 10 с, одна попытка)
 TCP_CHECK_TIMEOUT = 10
 TCP_MAX_WORKERS = 400
+TCP_ATTEMPTS = 1          # только одна попытка TCP
 
 # Реальная проверка
 SOCKS_PORT = 8080
 REAL_CHECK_TIMEOUT = 15
 REAL_CHECK_CONCURRENCY = 30
 XRAY_STARTUP_DELAY = 1
+RETRY_COUNT = 0            # без повторов HTTP/HTTPS
 
 TEST_URLS = [
     "http://connectivitycheck.gstatic.com/generate_204"
 ]
 
-MAX_LATENCY_MS = 500  # максимально допустимая задержка TCP-соединения (мс)
+MAX_LATENCY_MS = 500       # порог задержки (TCP)
+ONLY_TCP = False
 
-# ---------- GEOIP ЗАГРУЗКА (CITY) ----------
-GEOIP_DB_PATH = "GeoLite2-City.mmdb"
-GEOIP_DB_URL = "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-City.mmdb"
+# Константы для проверки скорости (больше не используются, оставлены для совместимости)
+SPEED_TEST_URL = "http://speedtest.tele2.net/512KB.zip"
+MIN_SPEED_KBPS = 500
+
+# ---------- GEOIP ----------
+GEOIP_DB_PATH = "GeoLite2-Country.mmdb"
+GEOIP_DB_URL = "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/GeoLite2-Country.mmdb"
 
 def ensure_geoip_db():
     if not GEOIP_AVAILABLE:
         return False
     if os.path.exists(GEOIP_DB_PATH):
         return True
-    logging.info("🌍 Скачиваю базу GeoIP (City)...")
+    logging.info("🌍 База GeoIP не найдена. Пытаемся скачать...")
     try:
         r = requests.get(GEOIP_DB_URL, timeout=30)
         r.raise_for_status()
         with open(GEOIP_DB_PATH, 'wb') as f:
             f.write(r.content)
-        logging.info("✅ База GeoIP (City) скачана")
+        logging.info(f"✅ База GeoIP скачана: {GEOIP_DB_PATH}")
         return True
     except Exception as e:
-        logging.error(f"❌ Ошибка скачивания GeoIP: {e}")
+        logging.error(f"❌ Не удалось скачать базу GeoIP: {e}")
         return False
 
 reader = None
@@ -113,19 +119,19 @@ if ensure_geoip_db():
         reader = geoip2.database.Reader(GEOIP_DB_PATH)
     except Exception as e:
         logging.error(f"❌ Не удалось открыть базу GeoIP: {e}")
+        reader = None
 
-def get_geo_info(ip):
-    """Возвращает (флаг, город) для указанного IP"""
+def get_country_flag(ip):
     if reader is None:
-        return "", ""
+        return ""
     try:
-        response = reader.city(ip)
+        response = reader.country(ip)
         country_code = response.country.iso_code
-        city = response.city.name if response.city.name else ""
-        flag = ''.join(chr(127397 + ord(c)) for c in country_code.upper()) if country_code else ""
-        return flag, city
+        if country_code:
+            return ''.join(chr(127397 + ord(c)) for c in country_code.upper())
     except Exception:
-        return "", ""
+        pass
+    return ""
 
 # ---------- ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ----------
 @lru_cache(maxsize=256)
@@ -133,7 +139,7 @@ def resolve_host(host):
     return socket.gethostbyname(host)
 
 def read_sources():
-    logging.info("📖 Чтение sources.txt...")
+    logging.info("📖 Чтение файла sources.txt...")
     sources = []
     try:
         with open(SOURCES_FILE, 'r', encoding='utf-8') as f:
@@ -147,46 +153,52 @@ def read_sources():
     return sources
 
 def fetch_content(url):
-    logging.info(f"⬇️ Загружаю: {url}")
+    logging.info(f"⬇️ Загружаю источник: {url}")
     try:
-        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers={'User-Agent': USER_AGENT})
+        headers = {'User-Agent': USER_AGENT}
+        resp = requests.get(url, timeout=REQUEST_TIMEOUT, headers=headers)
         resp.raise_for_status()
-        logging.info(f"✅ Загружено {len(resp.text)} байт")
+        logging.info(f"✅ Загружено {len(resp.text)} байт из {url}")
         return resp.text
     except Exception as e:
         logging.warning(f"⚠️ Не удалось загрузить {url}: {e}")
         return None
 
 def extract_links_from_text(text):
-    # Добавлены vmess и hysteria2/hy2
     return re.findall(r'(?:vless|ss|trojan|vmess|hysteria2|hy2)://[^\s<>"\']+', text)
 
 def decode_base64_content(encoded):
     try:
-        decoded = base64.b64decode(encoded.strip()).decode('utf-8', errors='ignore')
+        encoded = encoded.strip()
+        decoded = base64.b64decode(encoded).decode('utf-8', errors='ignore')
         return decoded
     except:
         return encoded
 
 def gather_all_links(sources):
-    logging.info(f"🔍 Сбор ссылок из {len(sources)} источников...")
+    logging.info(f"🔍 Начинаю сбор ссылок из {len(sources)} источников...")
     all_links = set()
     for idx, src in enumerate(sources, 1):
-        logging.info(f"📦 [{idx}/{len(sources)}] {src[:60]}...")
+        logging.info(f"📦 Обработка источника [{idx}/{len(sources)}]: {src[:60]}...")
         if src.startswith(('vless://', 'ss://', 'trojan://', 'vmess://', 'hysteria2://', 'hy2://')):
             all_links.add(src)
             continue
+
         content = fetch_content(src)
         if not content:
             continue
+
         decoded = decode_base64_content(content)
         links = extract_links_from_text(content)
         if decoded != content:
             links.extend(extract_links_from_text(decoded))
+
         for link in links:
             all_links.add(link)
-        logging.info(f"🔗 Получено {len(links)} ссылок")
-    logging.info(f"🎯 Всего уникальных ссылок: {len(all_links)}")
+
+        logging.info(f"🔗 Из {src} получено {len(links)} ссылок")
+
+    logging.info(f"🎯 Всего собрано уникальных ссылок: {len(all_links)}")
     return list(all_links)
 
 # ---------- ПАРСЕРЫ ----------
@@ -312,6 +324,7 @@ def parse_trojan_link(link):
 
 def parse_vmess_link(link):
     try:
+        # Формат: vmess://base64-encoded-json
         b64_part = link[8:]  # после vmess://
         if '#' in b64_part:
             b64_part = b64_part.split('#')[0]
@@ -408,7 +421,7 @@ def parse_link(link):
         return None
 
 def shorten_link(link):
-    """Возвращает сокращённое представление ссылки: протокол://хост:порт"""
+    """Возвращает протокол://хост:порт (или обрезает до первого ?)"""
     parsed = parse_link(link)
     if parsed:
         return f"{parsed['protocol']}://{parsed['host']}:{parsed['port']}"
@@ -562,7 +575,7 @@ def create_xray_config(config):
     base_config["outbounds"].append(outbound)
     return base_config
 
-# ---------- TCP ПРОВЕРКА (возвращает IP и задержку при успехе) ----------
+# ---------- TCP ПРОВЕРКА (одна попытка + задержка) ----------
 def check_tcp(link):
     parsed = parse_link(link)
     if not parsed:
@@ -574,20 +587,23 @@ def check_tcp(link):
         sock.settimeout(TCP_CHECK_TIMEOUT)
         start = time.time()
         result = sock.connect_ex((ip, port))
-        latency_ms = int((time.time() - start) * 1000) if result == 0 else None
+        latency = int((time.time() - start) * 1000)
         sock.close()
-        return (link, result == 0, ip if result == 0 else None, latency_ms)
-    except:
+        if result == 0 and latency <= MAX_LATENCY_MS:
+            return (link, True, ip, latency)
+        else:
+            return (link, False, ip, latency)
+    except Exception:
         return (link, False, None, None)
 
-# ---------- РЕАЛЬНАЯ ПРОВЕРКА (однократная, без повторов) ----------
+# ---------- РЕАЛЬНАЯ ПРОВЕРКА (одна попытка HTTP, одна HTTPS при необходимости) ----------
 def check_real(link):
     config_dict = parse_link(link)
     if not config_dict:
-        return (link, False)
+        return (link, False, None)
     xray_config = create_xray_config(config_dict)
     if not xray_config:
-        return (link, False)
+        return (link, False, None)
 
     with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
         config_path = f.name
@@ -617,7 +633,7 @@ def check_real(link):
                 if security in ('tls', 'reality'):
                     needs_https = True
 
-        # Однократная HTTP-проверка (перебираем тестовые URL, пока один не сработает)
+        # HTTP-проверка (одна попытка)
         http_success = False
         for test_url in TEST_URLS:
             try:
@@ -631,24 +647,24 @@ def check_real(link):
                 continue
 
         if not http_success:
-            return (link, False)
+            return (link, False, None)
 
-        # Однократная дополнительная проверка HTTPS (если нужна)
+        # Дополнительная проверка HTTPS (одна попытка, если нужна)
         if needs_https:
             try:
                 https_test = "https://www.google.com/generate_204"
-                requests.get(https_test, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
-                             headers={'User-Agent': USER_AGENT}, verify=False)
-                # если дошли до сюда – успех
+                resp = requests.get(https_test, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
+                                    headers={'User-Agent': USER_AGENT}, verify=False)
+                # если успех, ничего не делаем
             except Exception:
-                return (link, False)
+                return (link, False, None)
 
         # Все проверки пройдены
-        return (link, True)
+        return (link, True, None)
 
     except Exception as e:
         logging.debug(f"Ошибка при проверке {link[:60]}: {e}")
-        return (link, False)
+        return (link, False, None)
     finally:
         if process:
             process.terminate()
@@ -659,49 +675,53 @@ def check_real(link):
         if os.path.exists(config_path):
             os.unlink(config_path)
 
-# ---------- ДВУХУРОВНЕВАЯ ФИЛЬТРАЦИЯ С ОТСЕВОМ ПО TCP-ЗАДЕРЖКЕ ----------
+# ---------- ДВУХУРОВНЕВАЯ ФИЛЬТРАЦИЯ С ОТСЕВОМ ПО ФЛАГУ ----------
 def filter_working_links(links):
     global record_counter, current_check, total_checks
     total_checks = len(links)
-    logging.info(f"🚀 Начинаю двухуровневую проверку {total_checks} ссылок")
+    logging.info(f"🚀 Начинаю фильтрацию {total_checks} ссылок")
 
-    # Этап 1: TCP-проверка + замер задержки
-    logging.info(f"🌐 Этап 1: TCP-проверка {total_checks} ссылок...")
-    tcp_success = []  # (link, ip, latency_ms)
+    # ---------- Этап 1: TCP (одна попытка + задержка) ----------
+    logging.info(f"🌐 Этап 1: TCP-проверка (задержка ≤ {MAX_LATENCY_MS} мс)...")
+    tcp_success = []  # (link, ip, latency)
     with ThreadPoolExecutor(max_workers=TCP_MAX_WORKERS) as executor:
         future_to_link = {executor.submit(check_tcp, link): link for link in links}
         for future in as_completed(future_to_link):
             current_check += 1
             link, ok, ip, latency = future.result()
-            if ok and ip and latency is not None:
-                # Отсев по задержке
-                if latency <= MAX_LATENCY_MS:
-                    tcp_success.append((link, ip, latency))
-    logging.info(f"📊 TCP-проверка завершена. Прошли (latency <= {MAX_LATENCY_MS} мс): {len(tcp_success)}/{total_checks}")
+            if ok:
+                tcp_success.append((link, ip, latency))
+    logging.info(f"📊 TCP-проверка завершена. Прошли (TCP+latency): {len(tcp_success)}/{total_checks}")
 
     if not tcp_success:
         return []
 
-    # Определяем флаги и города для прошедших TCP
-    logging.info(f"🌍 Определение геоданных для {len(tcp_success)} серверов...")
-    geo_by_link = {}  # link -> (flag, city)
-    for link, ip, _ in tcp_success:
-        flag, city = get_geo_info(ip) if ip else ("", "")
+    # ---------- Этап 2: GeoIP ----------
+    logging.info(f"🌍 Определение флагов для {len(tcp_success)} серверов...")
+    links_with_flags = []  # (link, flag)
+    for link, ip, latency in tcp_success:
+        flag = get_country_flag(ip) if ip else ""
         if flag:
-            geo_by_link[link] = (flag, city)
+            links_with_flags.append((link, flag))
+        else:
+            short = shorten_link(link)
+            logging.debug(f"Сервер без флага отсеян: {short} (latency={latency} мс)")
 
-    logging.info(f"🧾 Серверов с флагами: {len(geo_by_link)}")
+    logging.info(f"🧾 Серверов с флагами: {len(links_with_flags)}")
 
-    if not geo_by_link:
+    if not links_with_flags:
         return []
 
-    # Этап 2: реальная проверка только для серверов с флагами
-    logging.info(f"🧪 Этап 2: Реальная проверка {len(geo_by_link)} ссылок...")
-    working_links_with_geo = []  # (link, flag, city)
-    stage_total = len(geo_by_link)
-    stage_current = 0
+    if ONLY_TCP:
+        logging.info("⏩ Режим ONLY_TCP – реальная проверка пропущена")
+        return links_with_flags
 
-    links_to_check = list(geo_by_link.keys())
+    # ---------- Этап 3: реальная проверка (однократная) ----------
+    logging.info(f"🧪 Этап 3: Реальная проверка {len(links_with_flags)} ссылок...")
+    working_links_with_flags = []  # (link, flag)
+    stage_total = len(links_with_flags)
+    stage_current = 0
+    links_to_check = [link for link, _ in links_with_flags]
 
     with ThreadPoolExecutor(max_workers=REAL_CHECK_CONCURRENCY) as executor:
         future_to_link = {executor.submit(check_real, link): link for link in links_to_check}
@@ -709,10 +729,10 @@ def filter_working_links(links):
             stage_current += 1
             current_check += 1
             record_counter += 1
-            link, is_working = future.result()
+            link, is_working, _ = future.result()
             short = shorten_link(link)
 
-            # Определяем протокол
+            # Определяем протокол для лога
             if link.startswith('vless://'):
                 proto = 'vless'
             elif link.startswith('ss://'):
@@ -726,10 +746,12 @@ def filter_working_links(links):
             else:
                 proto = '?'
 
-            flag, city = geo_by_link[link]
+            # Находим соответствующий флаг
+            flag_dict = dict(links_with_flags)
+            flag = flag_dict[link]
 
             if is_working:
-                working_links_with_geo.append((link, flag, city))
+                working_links_with_flags.append((link, flag))
                 emoji = "✅"
             else:
                 emoji = "❌"
@@ -737,48 +759,54 @@ def filter_working_links(links):
             log_msg = f"{proto} {emoji} [{stage_current}/{stage_total}]: {short}"
             logging.info(log_msg)
 
-    logging.info(f"📊 Реальная проверка завершена. Рабочих с флагами: {len(working_links_with_geo)}/{stage_total}")
-    return working_links_with_geo
+    logging.info(f"📊 Реальная проверка завершена. Рабочих с флагами: {len(working_links_with_flags)}/{stage_total}")
+    return working_links_with_flags
 
-# ---------- СОХРАНЕНИЕ РЕЗУЛЬТАТОВ (С ФЛАГАМИ И ГОРОДАМИ) ----------
-def save_working_links(links_with_geo):
-    logging.info(f"💾 Сохраняю {len(links_with_geo)} серверов с геоданными...")
-    if not links_with_geo:
-        logging.warning("Нет серверов для сохранения.")
-        return 0
-
+# ---------- СОХРАНЕНИЕ РЕЗУЛЬТАТОВ (ИСПОЛЬЗУЕМ ГОТОВЫЕ ФЛАГИ) ----------
+def save_working_links(links_with_flags):
+    logging.info(f"💾 Сохраняю {len(links_with_flags)} рабочих ссылок в {OUTPUT_FILE}")
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
         f.write(f"#profile-title:{PROFILE_TITLE}\n")
         f.write(f"#subscription-userinfo:{SUBSCRIPTION_USERINFO}\n")
         f.write(f"#profile-update-interval:{PROFILE_UPDATE_INTERVAL}\n")
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
-        f.write(f"#announce: АКТИВНЫХ ТОННЕЛЕЙ 🚀 {len(links_with_geo)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
-        for idx, (link, flag, city) in enumerate(links_with_geo, 1):
+        f.write(f"#announce: АКТИВНЫХ ТОННЕЛЕЙ 🚀 {len(links_with_flags)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
+        for idx, (link, flag) in enumerate(links_with_flags, start=1):
             link_clean = re.sub(r'#.*$', '', link)
-            city_part = f" {city}" if city else ""
-            tag = f"#🔑📱ТОННЕЛЬ {idx:04d} | {flag}{city_part} |"
+            server_num = f"{idx:04d}"
+            config = parse_link(link_clean)
+            sni_part = None
+            if config:
+                explicit_sni = config.get('explicit_sni')
+                if explicit_sni:
+                    sni_part = f"SNI- {explicit_sni}"
+            tag_parts = [f"#🔑📡 {server_num}"]
+            if flag:
+                tag_parts.append(flag)
+            if sni_part:
+                tag_parts.append(sni_part)
+            tag = " | ".join(tag_parts)
             f.write(link_clean + tag + '\n')
-
-    logging.info(f"✅ Сохранено {len(links_with_geo)} серверов в {OUTPUT_FILE}")
-    return len(links_with_geo)
+    logging.info(f"💾 Сохранено {len(links_with_flags)} рабочих ссылок в {OUTPUT_FILE}")
 
 def create_base64_subscription():
     try:
         with open(OUTPUT_FILE, 'rb') as f:
-            encoded = base64.b64encode(f.read()).decode('ascii')
+            content = f.read()
+        encoded = base64.b64encode(content).decode('ascii')
         with open(OUTPUT_BASE64_FILE, 'w', encoding='ascii') as f:
             f.write(encoded)
-        logging.info(f"💾 Base64-версия сохранена в {OUTPUT_BASE64_FILE}")
+        logging.info(f"💾 Сохранена Base64-версия подписки в {OUTPUT_BASE64_FILE}")
     except Exception as e:
-        logging.error(f"❌ Ошибка создания Base64: {e}")
+        logging.error(f"❌ Ошибка при создании Base64-версии: {e}")
 
 def check_xray_available():
-    logging.info("🔍 Проверка Xray-core...")
+    logging.info("🔍 Проверка наличия Xray-core...")
     try:
         result = subprocess.run([XRAY_CORE_PATH, '--version'], capture_output=True, text=True, timeout=5)
         if result.returncode == 0:
-            logging.info(f"✅ Xray-core: {result.stdout.splitlines()[0]}")
+            logging.info(f"✅ Xray-core найден: {result.stdout.splitlines()[0]}")
             return True
         else:
             logging.warning("⚠️ Xray-core не отвечает")
@@ -787,13 +815,12 @@ def check_xray_available():
         logging.error(f"❌ Xray-core не найден по пути '{XRAY_CORE_PATH}'")
         return False
     except Exception as e:
-        logging.error(f"❌ Ошибка проверки Xray: {e}")
+        logging.error(f"❌ Ошибка при проверке Xray-core: {e}")
         return False
 
-# ---------- ГЛАВНАЯ ФУНКЦИЯ ----------
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, отсев по TCP latency >500 мс, все проверки однократные)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; одна попытка на этап, отсев по latency > {} мс на TCP)".format(MAX_LATENCY_MS))
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return
@@ -810,15 +837,15 @@ def main():
     current_check = 0
     total_checks = len(all_links)
 
-    working_links_with_geo = filter_working_links(all_links)
-    written = save_working_links(working_links_with_geo)
-
+    working_links_with_flags = filter_working_links(all_links)
+    written = len(working_links_with_flags)
     if written > 0:
+        save_working_links(working_links_with_flags)
         create_base64_subscription()
     else:
-        logging.warning("Нет серверов с флагами – Base64 не создана.")
+        logging.warning("Нет рабочих ссылок с флагами – файлы не созданы.")
 
-    logging.info(f"📊 Итог: {len(working_links_with_geo)} рабочих с флагами из {len(all_links)} проверенных")
+    logging.info(f"📊 Итог: {written} рабочих с флагами из {len(all_links)} проверенных")
     logging.info("🏁 Работа завершена")
 
 if __name__ == "__main__":

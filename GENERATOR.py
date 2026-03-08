@@ -2,6 +2,7 @@
 # GENERATOR.py – Максимально быстрая проверка Vless/SS/Trojan серверов + флаги стран
 # Оптимизация: флаг определяется сразу после TCP, реальная проверка только для серверов с флагом
 # Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты увеличены до 10с, один тестовый URL
+# Дополнительные проверки: HTTPS для TLS-ключей, скорость (512 КБ, мин. 500 KB/s)
 
 import re
 import socket
@@ -85,9 +86,9 @@ TEST_URLS = [
 MAX_LATENCY_MS = 500
 ONLY_TCP = False
 
-# NEW: Константы для проверки скорости
-SPEED_TEST_URL = "http://speedtest.tele2.net/1MB.zip"
-MIN_SPEED_KBPS = 100  # минимальная скорость в KB/s
+# Константы для проверки скорости (512 КБ, мин. 500 KB/s)
+SPEED_TEST_URL = "http://speedtest.tele2.net/512KB.zip"
+MIN_SPEED_KBPS = 500
 
 # ---------- GEOIP ----------
 GEOIP_DB_PATH = "GeoLite2-Country.mmdb"
@@ -469,18 +470,16 @@ def check_real(link):
             'https': f'socks5h://127.0.0.1:{SOCKS_PORT}'
         }
 
-        # NEW: Определяем, нужно ли проверять TLS (HTTPS)
+        # Определяем, нужно ли проверять HTTPS (для TLS-ключей)
         needs_https = False
         if config_dict['protocol'] in ('vless', 'trojan'):
             security = config_dict.get('security', 'none')
             if security in ('tls', 'reality'):
                 needs_https = True
 
-        # Переменные для сбора результатов
+        # HTTP-проверка (как и раньше, с повторными попытками)
         http_success = False
         http_latency = None
-
-        # Цикл повторных попыток для HTTP
         for attempt in range(RETRY_COUNT + 1):
             for test_url in TEST_URLS:
                 try:
@@ -492,23 +491,23 @@ def check_real(link):
                     latency = int((time.time() - start) * 1000)
                     http_success = True
                     http_latency = latency
-                    break  # успешный HTTP-запрос, выходим из цикла URL
+                    break
                 except Exception:
-                    continue  # пробуем следующий URL
+                    continue
             if http_success:
-                break  # успешная попытка, выходим из цикла attempt
+                break
             time.sleep(1)
 
         if not http_success:
             return (link, False, None)
 
-        # --- Дополнительная проверка HTTPS (если нужна) ---
+        # Дополнительная проверка HTTPS (если нужна)
         if needs_https:
             https_ok = False
             for attempt in range(2):  # две попытки
                 try:
                     https_test = "https://www.google.com/generate_204"
-                    # verify=False для игнорирования ошибок сертификата
+                    # verify=False для игнорирования ошибок сертификата (чтобы не отсекать из-за локальных проблем)
                     resp = requests.get(https_test, proxies=proxies, timeout=REAL_CHECK_TIMEOUT,
                                         headers={'User-Agent': USER_AGENT}, verify=False)
                     https_ok = True
@@ -518,16 +517,15 @@ def check_real(link):
             if not https_ok:
                 return (link, False, None)
 
-        # --- Проверка скорости ---
+        # Проверка скорости (512 КБ)
         try:
             start_time = time.time()
-            # Скачиваем не более 1 МБ, таймаут 30 секунд
             r = requests.get(SPEED_TEST_URL, proxies=proxies, stream=True, timeout=30)
             r.raise_for_status()
             downloaded = 0
             for chunk in r.iter_content(chunk_size=8192):
                 downloaded += len(chunk)
-                if downloaded >= 1024 * 1024:  # 1 MB
+                if downloaded >= 512 * 1024:  # 512 KB
                     break
             elapsed = time.time() - start_time
             if elapsed > 0:
@@ -535,7 +533,6 @@ def check_real(link):
                 if speed_kbps < MIN_SPEED_KBPS:
                     return (link, False, None)
         except Exception:
-            # Если скорость измерить не удалось, считаем провалом
             return (link, False, None)
 
         # Все проверки пройдены
@@ -700,7 +697,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=15с, повторы=2)")
+    logging.info("🟢 Запуск генератора подписок (увеличенные таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s)")
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

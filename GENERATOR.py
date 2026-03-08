@@ -2,8 +2,9 @@
 # GENERATOR.py – Проверка Vless/SS/Trojan/VMess/Hysteria2 серверов + флаги стран
 # Добавлены протоколы VMess и Hysteria2, отсев по latency (> MAX_LATENCY_MS) сразу после HTTP
 # Логи TCP убраны, REAL_CHECK_CONCURRENCY = 30, XRAY_STARTUP_DELAY = 1, таймауты TCP=10с, Xray=15с, повторы=2
-# Дополнительные проверки: HTTPS для TLS-ключей, скорость (512 КБ, мин. 500 KB/s)
+# Дополнительные проверки: HTTPS для TLS-ключей (скорость исключена)
 # Лог упрощён: протокол, статус, прогресс, сокращённая ссылка
+# Добавлена повторная TCP-проверка (TCP_ATTEMPTS = 3)
 
 import re
 import socket
@@ -69,9 +70,10 @@ REQUEST_TIMEOUT = 10
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 XRAY_CORE_PATH = "xray"
 
-# TCP-проверка (таймаут 10 с)
+# TCP-проверка (таймаут 10 с, количество попыток)
 TCP_CHECK_TIMEOUT = 10
 TCP_MAX_WORKERS = 400
+TCP_ATTEMPTS = 3          # количество попыток TCP-проверки (первая + повторы)
 
 # Реальная проверка
 SOCKS_PORT = 8080
@@ -87,7 +89,7 @@ TEST_URLS = [
 MAX_LATENCY_MS = 500
 ONLY_TCP = False
 
-# Константы для проверки скорости (512 КБ, мин. 500 KB/s)
+# Константы для проверки скорости (больше не используются, оставлены для совместимости)
 SPEED_TEST_URL = "http://speedtest.tele2.net/512KB.zip"
 MIN_SPEED_KBPS = 500
 
@@ -578,23 +580,29 @@ def create_xray_config(config):
     base_config["outbounds"].append(outbound)
     return base_config
 
-# ---------- TCP ПРОВЕРКА (возвращает IP при успехе) ----------
+# ---------- TCP ПРОВЕРКА (с повторными попытками) ----------
 def check_tcp(link):
     parsed = parse_link(link)
     if not parsed:
         return (link, False, None)
     host, port = parsed['host'], parsed['port']
-    try:
-        ip = resolve_host(host)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(TCP_CHECK_TIMEOUT)
-        result = sock.connect_ex((ip, port))
-        sock.close()
-        return (link, result == 0, ip if result == 0 else None)
-    except:
-        return (link, False, None)
+    for attempt in range(TCP_ATTEMPTS):
+        try:
+            ip = resolve_host(host)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(TCP_CHECK_TIMEOUT)
+            result = sock.connect_ex((ip, port))
+            sock.close()
+            if result == 0:
+                return (link, True, ip)
+        except Exception:
+            pass
+        # если это была не последняя попытка, ждём 1 секунду перед повтором
+        if attempt < TCP_ATTEMPTS - 1:
+            time.sleep(1)
+    return (link, False, None)
 
-# ---------- РЕАЛЬНАЯ ПРОВЕРКА (с дополнительными тестами) ----------
+# ---------- РЕАЛЬНАЯ ПРОВЕРКА (без проверки скорости) ----------
 def check_real(link):
     config_dict = parse_link(link)
     if not config_dict:
@@ -675,25 +683,7 @@ def check_real(link):
             if not https_ok:
                 return (link, False, None)
 
-        # Проверка скорости (512 КБ)
-        try:
-            start_time = time.time()
-            r = requests.get(SPEED_TEST_URL, proxies=proxies, stream=True, timeout=30)
-            r.raise_for_status()
-            downloaded = 0
-            for chunk in r.iter_content(chunk_size=8192):
-                downloaded += len(chunk)
-                if downloaded >= 512 * 1024:  # 512 KB
-                    break
-            elapsed = time.time() - start_time
-            if elapsed > 0:
-                speed_kbps = (downloaded / 1024) / elapsed  # KB/s
-                if speed_kbps < MIN_SPEED_KBPS:
-                    return (link, False, None)
-        except Exception:
-            return (link, False, None)
-
-        # Все проверки пройдены
+        # Все проверки пройдены (скорость больше не проверяется)
         return (link, True, http_latency)
 
     except Exception as e:
@@ -855,7 +845,7 @@ def check_xray_available():
 
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, повторы=2, тест скорости 512 КБ, мин. 500 KB/s, отсев по latency > {}ms сразу после HTTP)".format(MAX_LATENCY_MS))
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, Xray=15с, повторы=2, отсев по latency > {}ms сразу после HTTP, проверка скорости отключена)".format(MAX_LATENCY_MS))
     if not check_xray_available():
         logging.error("Xray-core обязателен. Завершение.")
         return

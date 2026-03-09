@@ -1,1 +1,2 @@
-
+# WL RUS (selected)
+https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt

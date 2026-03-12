@@ -2,6 +2,7 @@
 # GENERATOR.py – Финальная версия с групповым логированием.
 # Проверка реальных сайтов: только Google.
 # Порядок регионов: сначала все российские, потом все остальные (европа, америка, другие).
+# TLS проверка только для ключей с явным SNI.
 
 import os
 import re
@@ -32,7 +33,7 @@ OUTPUT_BASE64_FILE = "subscription_base64.txt"
 REQUEST_TIMEOUT = 10
 SING_BOX_PATH = "./sing-box"
 
-# ---------- Настройки подписки (изменено по вашему запросу) ----------
+# ---------- Настройки подписки ----------
 PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
 SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
@@ -235,7 +236,7 @@ def gather_all_links(sources):
     logging.info(f"🎯 Всего уникальных ссылок: {len(all_links)}")
     return list(all_links)
 
-# ---------- ПАРСЕРЫ (без изменений) ----------
+# ---------- ПАРСЕРЫ ----------
 def parse_vless_link(link):
     try:
         without_proto = link[8:]
@@ -741,17 +742,26 @@ def filter_working_links(links):
     if not geo_by_link:
         return []
 
-    # Этап 1.5: TLS
-    logging.info(f"🔒 Этап 1.5: TLS-проверка {len(geo_by_link)} ссылок...")
+    # Этап 1.5: TLS (только для ключей с явным SNI)
+    logging.info(f"🔒 Этап 1.5: TLS-проверка {len(geo_by_link)} ссылок (только с явным SNI)...")
     tls_passed = []  # (link, flag, city, country_code, parsed)
     tls_futures = {}
     tls_processed = 0
     tls_ok = 0
     tls_fail = 0
+    tls_skipped_no_sni = 0
 
     with ThreadPoolExecutor(max_workers=TLS_MAX_WORKERS) as executor:
         for link, (flag, city, country_code, parsed) in geo_by_link.items():
             if parsed and needs_tls_check(parsed):
+                # Проверяем наличие явного SNI
+                if not parsed.get('explicit_sni'):
+                    tls_skipped_no_sni += 1
+                    tls_processed += 1
+                    tls_fail += 1
+                    if tls_processed % 10 == 0:
+                        logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
+                    continue
                 host = parsed['host']
                 port = parsed['port']
                 sni = parsed.get('sni', host)
@@ -773,9 +783,9 @@ def filter_working_links(links):
             else:
                 tls_fail += 1
             if tls_processed % 10 == 0:
-                logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail}")
+                logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
 
-    logging.info(f"✅ TLS-проверка завершена. OK {tls_ok}, FAIL {tls_fail}, всего {tls_processed}")
+    logging.info(f"✅ TLS-проверка завершена. OK {tls_ok}, FAIL {tls_fail}, всего {tls_processed} (пропущено без SNI: {tls_skipped_no_sni})")
     if not tls_passed:
         return []
 
@@ -817,7 +827,7 @@ def filter_working_links(links):
     logging.info(f"📊 Реальная проверка завершена. Рабочих: {len(working_links_with_geo)}/{stage_total}, OK {real_ok}, FAIL {real_fail}")
     return working_links_with_geo
 
-# ---------- ЧЕРЕДОВАНИЕ ПО РЕГИОНАМ (изменено: сначала все российские, потом все остальные) ----------
+# ---------- ЧЕРЕДОВАНИЕ ПО РЕГИОНАМ (сначала все российские) ----------
 def interleave_regions(links_with_geo):
     # links_with_geo: список кортежей (link, flag, city, country_code, parsed)
     europe = ['AL','AD','AT','BY','BE','BA','BG','HR','CZ','DK','EE','FI','FR','DE','GR','HU','IS','IE','IT','LV','LT','LU','MT','MD','MC','ME','NL','MK','NO','PL','PT','RO','RS','SK','SI','ES','SE','CH','UA','GB','VA','RS']
@@ -902,7 +912,7 @@ def check_singbox_available():
 # ---------- ГЛАВНАЯ ----------
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google, порядок: сначала Россия, потом остальные)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google, порядок: сначала Россия, TLS только с явным SNI)")
     if not check_singbox_available():
         logging.error("sing-box обязателен. Завершение.")
         return

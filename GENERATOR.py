@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # GENERATOR.py – Финальная версия с групповым логированием.
 # Проверка реальных сайтов: только Google.
-# Чередование регионов: Россия, Европа, Америка, остальные – по кругу.
+# Порядок регионов: сначала все российские, потом все остальные (европа, америка, другие).
 
 import os
 import re
@@ -32,10 +32,10 @@ OUTPUT_BASE64_FILE = "subscription_base64.txt"
 REQUEST_TIMEOUT = 10
 SING_BOX_PATH = "./sing-box"
 
-# ---------- Настройки подписки ----------
-PROFILE_TITLE = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-SUPPORT_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
-PROFILE_WEB_PAGE_URL = "🇷🇺КРОТовыеТОННЕЛИ🇷🇺"
+# ---------- Настройки подписки (изменено по вашему запросу) ----------
+PROFILE_TITLE = "📡КРОТовыеТОННЕЛИ📡"
+SUPPORT_URL = "📡КРОТовыеТОННЕЛИ📡"
+PROFILE_WEB_PAGE_URL = "📡КРОТовыеТОННЕЛИ📡"
 PROFILE_UPDATE_INTERVAL = "1"
 SUBSCRIPTION_USERINFO = "upload=0; download=0; total=0; expire=0"
 
@@ -779,9 +779,12 @@ def filter_working_links(links):
     if not tls_passed:
         return []
 
+    # Создаём словарь для быстрого доступа к данным TLS (включая parsed)
+    tls_info = {link: (flag, city, country_code, parsed) for link, flag, city, country_code, parsed in tls_passed}
+
     # Этап 2: реальная проверка
     logging.info(f"🧪 Этап 2: Реальная проверка {len(tls_passed)} ссылок (быстрые URL + Google)...")
-    working_links_with_geo = []  # (link, flag, city, country_code)
+    working_links_with_geo = []  # (link, flag, city, country_code, parsed)
     stage_total = len(tls_passed)
     stage_current = 0
     real_ok = 0
@@ -798,15 +801,11 @@ def filter_working_links(links):
             link, is_working = future.result()
             short = shorten_link(link)
 
-            # Находим соответствующие флаг, город, код страны
-            flag = city = country_code = None
-            for l, f, c, cc, _ in tls_passed:
-                if l == link:
-                    flag, city, country_code = f, c, cc
-                    break
+            # Извлекаем сохранённые геоданные и parsed
+            flag, city, country_code, parsed = tls_info.get(link, ("", "", "", None))
 
             if is_working:
-                working_links_with_geo.append((link, flag, city, country_code))
+                working_links_with_geo.append((link, flag, city, country_code, parsed))
                 real_ok += 1
             else:
                 real_fail += 1
@@ -818,9 +817,9 @@ def filter_working_links(links):
     logging.info(f"📊 Реальная проверка завершена. Рабочих: {len(working_links_with_geo)}/{stage_total}, OK {real_ok}, FAIL {real_fail}")
     return working_links_with_geo
 
-# ---------- ЧЕРЕДОВАНИЕ ПО РЕГИОНАМ ----------
+# ---------- ЧЕРЕДОВАНИЕ ПО РЕГИОНАМ (изменено: сначала все российские, потом все остальные) ----------
 def interleave_regions(links_with_geo):
-    # Списки стран Европы и Америки (можно дополнить)
+    # links_with_geo: список кортежей (link, flag, city, country_code, parsed)
     europe = ['AL','AD','AT','BY','BE','BA','BG','HR','CZ','DK','EE','FI','FR','DE','GR','HU','IS','IE','IT','LV','LT','LU','MT','MD','MC','ME','NL','MK','NO','PL','PT','RO','RS','SK','SI','ES','SE','CH','UA','GB','VA','RS']
     americas = ['US','CA','MX','BR','AR','CL','CO','PE','VE','UY','PY','BO','EC','GY','SR','GF','PA','CR','NI','HN','SV','GT','BZ','DO','CU','HT','JM','TT','BS','BB','LC','VC','GD','AG','DM','KN','AW','CW','BQ','SX','MF','GP','MQ','YT','RE','GF','PM','BL','MF','WF','PF','NC','TF','GS','HM','BV']
     
@@ -840,18 +839,8 @@ def interleave_regions(links_with_geo):
         else:
             other.append(item)
     
-    result = []
-    # Пока есть хотя бы один элемент в любой группе
-    while ru or eu or am or other:
-        if ru:
-            result.append(ru.pop(0))
-        if eu:
-            result.append(eu.pop(0))
-        if am:
-            result.append(am.pop(0))
-        if other:
-            result.append(other.pop(0))
-    return result
+    # Сначала все российские, потом все европейские, потом американские, потом остальные
+    return ru + eu + am + other
 
 # ---------- СОХРАНЕНИЕ ----------
 def save_working_links(links_with_geo):
@@ -860,7 +849,7 @@ def save_working_links(links_with_geo):
         logging.warning("Нет серверов для сохранения.")
         return 0
 
-    # Чередуем по регионам
+    # Сортируем по регионам (сначала Россия)
     sorted_links = interleave_regions(links_with_geo)
 
     with open(OUTPUT_FILE, 'w', encoding='utf-8') as f:
@@ -870,10 +859,14 @@ def save_working_links(links_with_geo):
         f.write(f"#support-url:{SUPPORT_URL}\n")
         f.write(f"#profile-web-page-url:{PROFILE_WEB_PAGE_URL}\n")
         f.write(f"#announce: АКТИВНЫХ ТОННЕЛЕЙ 🚀 {len(sorted_links)} | ОБНОВЛЕНО 📅 {TODAY_STR}\n")
-        for idx, (link, flag, city, _) in enumerate(sorted_links, 1):
+        for idx, (link, flag, city, country_code, parsed) in enumerate(sorted_links, 1):
             link_clean = re.sub(r'#.*$', '', link)
             city_part = f" {city}" if city else ""
-            tag = f"#🔑📱ТОННЕЛЬ {idx:04d} | {flag}{city_part} |"
+            # Формируем тег: #🔑📡 номер | флаг[ город] [| SNI-...]
+            tag = f"#🔑📡 {idx:04d} | {flag}{city_part}"
+            # Добавляем информацию о явном SNI, если он есть
+            if parsed and parsed.get('explicit_sni'):
+                tag += f" | SNI- {parsed['explicit_sni']}"
             f.write(link_clean + tag + '\n')
 
     logging.info(f"✅ Сохранено {len(sorted_links)} серверов в {OUTPUT_FILE}")
@@ -909,7 +902,7 @@ def check_singbox_available():
 # ---------- ГЛАВНАЯ ----------
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google, чередование регионов)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google, порядок: сначала Россия, потом остальные)")
     if not check_singbox_available():
         logging.error("sing-box обязателен. Завершение.")
         return

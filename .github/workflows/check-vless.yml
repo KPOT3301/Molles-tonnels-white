@@ -1,8 +1,9 @@
+# run.yml
 name: Check Vless Servers
 
 on:
   schedule:
-    - cron: '0 19 * * *'   # 19:00 UTC = 00:00 Оренбург (UTC+5) следующего дня
+    - cron: '0 19 * * *'   # 19:00 UTC = 00:00 ЕКБ (UTC+5)
   workflow_dispatch:
 
 jobs:
@@ -11,6 +12,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -22,12 +25,13 @@ jobs:
           pip install -r requirements.txt
           pip install geoip2
 
-      - name: Download Xray-core
+      - name: Download sing-box
         run: |
-          wget -q https://github.com/XTLS/Xray-core/releases/latest/download/Xray-linux-64.zip
-          unzip -q Xray-linux-64.zip -d xray-core
-          chmod +x xray-core/xray
-          echo "$(pwd)/xray-core" >> $GITHUB_PATH
+          wget -q https://github.com/SagerNet/sing-box/releases/download/v1.11.0/sing-box-1.11.0-linux-amd64.tar.gz
+          tar -xzf sing-box-1.11.0-linux-amd64.tar.gz
+          cp sing-box-*/sing-box .
+          chmod +x sing-box
+          echo "$(pwd)" >> $GITHUB_PATH
 
       - name: Run GENERATOR.py
         run: python GENERATOR.py
@@ -37,10 +41,10 @@ jobs:
           git config --global user.name 'github-actions[bot]'
           git config --global user.email 'github-actions[bot]@users.noreply.github.com'
           git add subscription.txt subscription_base64.txt
-          if git diff --staged --quiet; then
+          if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "Auto-update subscription.txt"
+            git commit -m "Auto-update subscription files"
             git pull --rebase origin main
-            git push https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+            git push
           fi

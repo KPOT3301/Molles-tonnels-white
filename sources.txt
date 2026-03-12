@@ -8,6 +8,9 @@ https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/head
 # 🐶BobiVPN Lite🐶
 https://raw.githubusercontent.com/seknei3/psychic-fiestas/refs/heads/main/bobi_vpn_lite.txt
 
+# 🇷🇺 BobiVPN Russia
+https://raw.githubusercontent.com/seknei3/psychic-fiestas/refs/heads/main/countries/russia.txt
+
 # limevpn
 https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt?v=1
 

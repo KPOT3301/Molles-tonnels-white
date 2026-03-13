@@ -29,3 +29,6 @@ https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist
 
 # VP01596
 https://raw.githubusercontent.com/VP01596/vless-top15/refs/heads/main/top100.txt
+
+# 🐶BobiVPN Lite🐶
+https://raw.githubusercontent.com/seknei3/psychic-fiestas/refs/heads/main/bobi_vpn_lite.txt

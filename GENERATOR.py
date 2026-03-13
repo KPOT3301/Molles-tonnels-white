@@ -3,6 +3,8 @@
 # Проверка реальных сайтов: только Google.
 # Порядок регионов: сначала все российские, потом все остальные (европа, америка, другие).
 # TLS проверка только для ключей с явным SNI.
+#
+# ИЗМЕНЕНИЕ: теперь проверяются и сохраняются только российские серверы.
 
 import os
 import re
@@ -47,7 +49,7 @@ GEOIP_DB_URL = "https://raw.githubusercontent.com/P3TERX/GeoLite.mmdb/download/G
 # ---------- TCP-проверка ----------
 TCP_CHECK_TIMEOUT = 10
 TCP_MAX_WORKERS = 400
-MAX_LATENCY_MS = 200
+MAX_LATENCY_MS = 250
 
 # ---------- TLS-проверка ----------
 TLS_CHECK_TIMEOUT = 1
@@ -708,11 +710,11 @@ def check_with_singbox(link, fast_urls, real_urls, fast_timeout=REAL_CHECK_TIMEO
         if os.path.exists(config_path):
             os.unlink(config_path)
 
-# ---------- ФИЛЬТРАЦИЯ ----------
+# ---------- ФИЛЬТРАЦИЯ (ТОЛЬКО РОССИЙСКИЕ) ----------
 def filter_working_links(links):
     global record_counter, current_check, total_checks
     total_checks = len(links)
-    logging.info(f"🚀 Начинаю двухуровневую проверку {total_checks} ссылок")
+    logging.info(f"🚀 Начинаю двухуровневую проверку {total_checks} ссылок (с последующим отбором только российских)")
 
     # Этап 1: TCP
     logging.info(f"🌐 Этап 1: TCP-проверка {total_checks} ссылок...")
@@ -739,11 +741,19 @@ def filter_working_links(links):
             geo_by_link[link] = (flag, city, country_code, parsed)
 
     logging.info(f"🧾 Серверов с флагами: {len(geo_by_link)}")
-    if not geo_by_link:
+
+    # Отбираем только российские
+    ru_geo_by_link = {link: (flag, city, country_code, parsed) 
+                      for link, (flag, city, country_code, parsed) in geo_by_link.items() 
+                      if country_code == 'RU'}
+    logging.info(f"🇷🇺 Из них российских: {len(ru_geo_by_link)}")
+
+    if not ru_geo_by_link:
+        logging.info("❌ Российские серверы не найдены, дальнейшая проверка не требуется.")
         return []
 
     # Этап 1.5: TLS (только для ключей с явным SNI)
-    logging.info(f"🔒 Этап 1.5: TLS-проверка {len(geo_by_link)} ссылок (только с явным SNI)...")
+    logging.info(f"🔒 Этап 1.5: TLS-проверка {len(ru_geo_by_link)} российских ссылок (только с явным SNI)...")
     tls_passed = []  # (link, flag, city, country_code, parsed)
     tls_futures = {}
     tls_processed = 0
@@ -752,7 +762,7 @@ def filter_working_links(links):
     tls_skipped_no_sni = 0
 
     with ThreadPoolExecutor(max_workers=TLS_MAX_WORKERS) as executor:
-        for link, (flag, city, country_code, parsed) in geo_by_link.items():
+        for link, (flag, city, country_code, parsed) in ru_geo_by_link.items():
             if parsed and needs_tls_check(parsed):
                 # Проверяем наличие явного SNI
                 if not parsed.get('explicit_sni'):
@@ -760,7 +770,7 @@ def filter_working_links(links):
                     tls_processed += 1
                     tls_fail += 1
                     if tls_processed % 10 == 0:
-                        logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
+                        logging.info(f"TLS прогресс (RU): обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
                     continue
                 host = parsed['host']
                 port = parsed['port']
@@ -772,7 +782,7 @@ def filter_working_links(links):
                 tls_processed += 1
                 tls_ok += 1
                 if tls_processed % 10 == 0:
-                    logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail}")
+                    logging.info(f"TLS прогресс (RU): обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail}")
 
         for future in as_completed(tls_futures):
             tls_processed += 1
@@ -783,9 +793,9 @@ def filter_working_links(links):
             else:
                 tls_fail += 1
             if tls_processed % 10 == 0:
-                logging.info(f"TLS прогресс: обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
+                logging.info(f"TLS прогресс (RU): обработано {tls_processed}, OK {tls_ok}, FAIL {tls_fail} (пропущено без SNI: {tls_skipped_no_sni})")
 
-    logging.info(f"✅ TLS-проверка завершена. OK {tls_ok}, FAIL {tls_fail}, всего {tls_processed} (пропущено без SNI: {tls_skipped_no_sni})")
+    logging.info(f"✅ TLS-проверка (RU) завершена. OK {tls_ok}, FAIL {tls_fail}, всего {tls_processed} (пропущено без SNI: {tls_skipped_no_sni})")
     if not tls_passed:
         return []
 
@@ -793,7 +803,7 @@ def filter_working_links(links):
     tls_info = {link: (flag, city, country_code, parsed) for link, flag, city, country_code, parsed in tls_passed}
 
     # Этап 2: реальная проверка
-    logging.info(f"🧪 Этап 2: Реальная проверка {len(tls_passed)} ссылок (быстрые URL + Google)...")
+    logging.info(f"🧪 Этап 2: Реальная проверка {len(tls_passed)} российских ссылок (быстрые URL + Google)...")
     working_links_with_geo = []  # (link, flag, city, country_code, parsed)
     stage_total = len(tls_passed)
     stage_current = 0
@@ -821,10 +831,10 @@ def filter_working_links(links):
                 real_fail += 1
 
             if stage_current % 10 == 0:
-                log_msg = f"Реальная проверка прогресс: {stage_current}/{stage_total}, OK {real_ok}, FAIL {real_fail}"
+                log_msg = f"Реальная проверка (RU) прогресс: {stage_current}/{stage_total}, OK {real_ok}, FAIL {real_fail}"
                 logging.info(log_msg)
 
-    logging.info(f"📊 Реальная проверка завершена. Рабочих: {len(working_links_with_geo)}/{stage_total}, OK {real_ok}, FAIL {real_fail}")
+    logging.info(f"📊 Реальная проверка (RU) завершена. Рабочих: {len(working_links_with_geo)}/{stage_total}, OK {real_ok}, FAIL {real_fail}")
     return working_links_with_geo
 
 # ---------- ЧЕРЕДОВАНИЕ ПО РЕГИОНАМ (сначала все российские) ----------
@@ -912,7 +922,8 @@ def check_singbox_available():
 # ---------- ГЛАВНАЯ ----------
 def main():
     global record_counter, current_check, total_checks
-    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google, порядок: сначала Россия, TLS только с явным SNI)")
+    logging.info("🟢 Запуск генератора подписок (протоколы: Vless, SS, Trojan, VMess, Hysteria2; таймауты: TCP=10с, TLS=5с, реальная=30с, задержка sing-box=5с, проверка на Google)")
+    logging.info("🇷🇺 Режим: проверяются и сохраняются только российские серверы")
     if not check_singbox_available():
         logging.error("sing-box обязателен. Завершение.")
         return
@@ -935,9 +946,9 @@ def main():
     if written > 0:
         create_base64_subscription()
     else:
-        logging.warning("Нет серверов с флагами – Base64 не создана.")
+        logging.warning("Нет российских серверов – Base64 не создана.")
 
-    logging.info(f"📊 Итог: {len(working_links_with_geo)} рабочих с флагами из {len(all_links)} проверенных")
+    logging.info(f"📊 Итог: {len(working_links_with_geo)} российских рабочих серверов из {len(all_links)} проверенных")
     logging.info("🏁 Работа завершена")
 
 if __name__ == "__main__":

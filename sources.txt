@@ -32,3 +32,16 @@ https://raw.githubusercontent.com/VP01596/vless-top15/refs/heads/main/top100.txt
 
 # 🐶BobiVPN Lite🐶
 https://raw.githubusercontent.com/seknei3/psychic-fiestas/refs/heads/main/bobi_vpn_lite.txt
+
+# 🐈‍⬛ VPN cat
+https://raw.githubusercontent.com/VPN-cat/VPN/refs/heads/main/configs/VPN-cat-top-100
+
+# GBR
+https://gbr.mydan.online/configs
+
+# jsxta/whitelist-russia
+https://gbr.mydan.online/configs
+
+# 🥭 КIЗЯК VPN 🥭
+https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt
+https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt

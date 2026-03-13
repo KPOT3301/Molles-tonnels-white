@@ -5,8 +5,6 @@ https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizy
 # АНОНИМУС 
 https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt
 
-# 🐶BobiVPN Lite🐶
-https://raw.githubusercontent.com/seknei3/psychic-fiestas/refs/heads/main/bobi_vpn_lite.txt
 
 # limevpn
 https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt?v=1

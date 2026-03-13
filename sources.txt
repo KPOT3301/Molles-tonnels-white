@@ -26,3 +26,6 @@ https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_B
 
 # reality 
 https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist
+
+# VP01596
+https://raw.githubusercontent.com/VP01596/vless-top15/refs/heads/main/top100.txt

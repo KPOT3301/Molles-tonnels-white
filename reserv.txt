@@ -1,22 +1,12 @@
-# 🥭 КIЗЯК VPN 🥭
-https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyakbeta6.txt
-https://raw.githubusercontent.com/Maskkost93/kizyak-vpn-4.0/refs/heads/main/kizyaktestru.txt
 
 # АНОНИМУС 
 https://raw.githubusercontent.com/4n0nymou3/multi-proxy-config-fetcher/refs/heads/main/configs/proxy_configs.txt
 
-
 # limevpn
 https://raw.githubusercontent.com/LimeHi/LimeVPN/refs/heads/main/LimeVPN.txt?v=1
 
-# jsxta/whitelist-russia
-https://gbr.mydan.online/configs
-
 # KfWL
 https://raw.githubusercontent.com/prominbro/KfWL/refs/heads/main/KfWL.txt
-
-# GBR
-https://gbr.mydan.online/configs
 
 # KfWL2
 https://gitverse.ru/api/repos/bywarm/rser/raw/branch/master/selected.txt
@@ -42,7 +32,3 @@ https://gitverse.ru/api/repos/cid-uskoritel/cid-white/raw/branch/master/whitelis
 
 # ALL vpn
 http://allvpn.x10.mx/sub.php
-
-# 🐈‍⬛ VPN cat
-https://raw.githubusercontent.com/VPN-cat/VPN/refs/heads/main/configs/VPN-cat-top-100
-

@@ -27,9 +27,6 @@ https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist
 # VP01596
 https://raw.githubusercontent.com/VP01596/vless-top15/refs/heads/main/top100.txt
 
-# 🐈‍⬛ VPN cat
-https://raw.githubusercontent.com/VPN-cat/VPN/refs/heads/main/configs/VPN-cat-top-100
-
 # GBR
 https://gbr.mydan.online/configs
 

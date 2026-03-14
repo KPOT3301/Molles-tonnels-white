@@ -17,10 +17,6 @@ https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_B
 # РКП
 https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/configs/url_work.txt
 
-# vlesstrojan
-https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part2.txt
-https://raw.githubusercontent.com/kort0881/vpn-checker-backend/main/checked/RU_Best/ru_white_all_part1.txt
-
 # reality 
 https://gitflic.ru/project/sigil/my-new-cool-project/blob/raw?file=whitelist
 
